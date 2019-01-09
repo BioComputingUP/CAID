@@ -1,0 +1,12 @@
+from setuptools import setup
+
+setup(name='bvaluation',
+      version='1.0',
+      description='Evaluation script for binary classifiers',
+      url='',
+      author='Marco Necci',
+      author_email='rvrmarco@gmail.com',
+      license='MIT',
+      packages=['bvaluation'],
+      install_requires=['numpy', 'pandas', 'sklearn', 'matplotlib'],
+      zip_safe=False)
