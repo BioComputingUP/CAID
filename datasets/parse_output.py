@@ -327,24 +327,24 @@ def parse_prediction_file(predfile):
             yield header, positions, residues, scores, states
 
 
-def write_prsed_results(methods, ref_seqs, overwrite=True):
+def write_parsed_results(methods, ref_seqs, **kwargs):
 
     # result_dir = "/mnt/projects"
     # parsed_dir = "/home/damiano/results_parsed"
-    result_dir = "/home/damiano/Projects/caid/data/results_raw"
-    parsed_dir_err = "/home/damiano/Projects/caid/data/results_parsed_err"
-    parsed_dir = "/home/damiano/Projects/caid/data/results_parsed"
+    # result_dir = "/home/damiano/Projects/caid/data/results_raw"
+    # parsed_dir_err = "/home/damiano/Projects/caid/data/results_parsed_err"
+    # parsed_dir = "/home/damiano/Projects/caid/data/results_parsed"
 
     # Parse jron separately
-    inputfile = "{}/jronn/results_jronn.txt".format(result_dir)
-    jronn_data = parse_jronn(inputfile, {'status_th': 0.5})
+    inputfile = "{}/{}/{}".format(kwargs.get('result_dir'), methods['jron']['result_dir'], methods['jron']['result_file'])
+    jronn_data = parse_jronn(inputfile, methods['jronn'])
 
     for method in methods:
         # inputpath = "{}/CAID/2018_09/{}/results/{}".format(result_dir, method['group'], method['result_dir'])
-        inputpath = "{}/{}".format(result_dir, method['result_dir'])
-        errfile = "{}/{}_{}_{}{}.err".format(parsed_dir_err, method['id'], method['group'], method['result_dir'], method.get('label', ''))
-        outfile = "{}/{}_{}_{}{}.out".format(parsed_dir, method['id'], method['group'], method['result_dir'], method.get('label', ''))
-        if not os.path.isfile(outfile) or overwrite:
+        inputpath = "{}/{}".format(kwargs.get('result_dir'), method['result_dir'])
+        errfile = "{}/{}_{}_{}{}.err".format(kwargs.get('parsed_dir_err'), method['id'], method['group'], method['result_dir'], method.get('label', ''))
+        outfile = "{}/{}_{}_{}{}.out".format(kwargs.get('parsed_dir'), method['id'], method['group'], method['result_dir'], method.get('label', ''))
+        if not os.path.isfile(outfile) or kwargs.get('overwrite_output'):
             with open(errfile, 'w') as ferr:
                 if method['func'] is not None:
                     with open(outfile, 'w') as fout:
@@ -359,9 +359,11 @@ def write_prsed_results(methods, ref_seqs, overwrite=True):
                             state = None
                             scores = None
 
+                            # Different treatment for JRONN
                             if method['result_dir'] == "jronn":
                                 seq, state, scores = jronn_data.get(disprot_id, (None, None, None))
 
+                            # All other methods (1 output file per protein)
                             else:
                                 inputfile = "{}/{}{}".format(inputpath, disprot_id, method['extension'])
 
@@ -421,11 +423,6 @@ def write_prsed_results(methods, ref_seqs, overwrite=True):
 
 if __name__ == "__main__":
 
-    # Mount caid folder somewere
-    # sudo mount 172.21.2.101:/volume1/Projects projects
-    # From IDRA
-    # sudo sshfs dampiove@protein.bio.unipd.it:/projects /mnt/projects/ -o IdentityFile='/home/damiano/.ssh/id_rsa',allow_other
-
     # Generate some data for the method list below
     # ls | while read line; do if[[-d $line / results]]; then ls $line / results | while read d; do echo "#" $line $d; ls $line / results / $d / DP00003 *; done; fi; done
     method_list = [
@@ -471,22 +468,30 @@ if __name__ == "__main__":
         {'id': 'D028', 'group': 'zhou', 'name': 'SPOT-Disorder1', 'result_dir': 'spot-disorder1', 'extension': '.spotd', 'func': parse_vertical_format, 'header_lines': 1, 'residue_pos': 1, 'score_pos': 2, 'status_pos': 3, 'status_char': 'D', 'use_conservation': True},
         {'id': 'D029', 'group': 'zhou', 'name': 'SPOT-Disorder2', 'result_dir': 'spot-disorder2', 'extension': '.spotd2', 'func': parse_vertical_format, 'header_lines': 2, 'residue_pos': 1, 'score_pos': 2, 'status_pos': 3, 'status_char': 'D', 'use_conservation': True},
         {'id': 'D030', 'group': 'zhou', 'name': 'SPOT-Disorder-Single', 'result_dir': 'spot-disorder-single', 'extension': '.spotds', 'func': parse_vertical_format, 'header_lines': 2, 'residue_pos': 1, 'score_pos': 2, 'status_pos': 3, 'status_char': 'D'},
-        {'id': 'D031', 'group': 'esnouf', 'name': 'JRONN', 'result_dir': 'jronn', 'extension': '.out', 'func': parse_jronn, 'status_th': 0.5},
+        {'id': 'D031', 'group': 'esnouf', 'name': 'JRONN', 'result_dir': 'jronn', 'outfile': 'results_jronn.txt', 'func': parse_jronn, 'status_th': 0.5},
         {'id': 'D033', 'group': 'vranken', 'name': 'DynaMine', 'result_dir': 'dynamine', 'extension': '', 'func': None}
     ]
 
-
+    # Mount caid folder somewhere
+    # sudo mount 172.21.2.101:/volume1/Projects projects
+    # From IDRA
+    # sudo sshfs dampiove@protein.bio.unipd.it:/projects /mnt/projects/ -o IdentityFile='/home/damiano/.ssh/id_rsa',allow_other
 
     # Parse reference sequences
-    # ref_seqs = parse_reference_sequences("{}/CAID/2018_09/disprot/disprot8_all.fasta".format(result_dir))
     reference_sequences = parse_reference_sequences("/home/damiano/Projects/caid/data/disprot8_all.fasta")
 
-    overwrite_output = False
-    # write_prsed_results(method_list, reference_sequences, overwrite_output)
+    # write_parsed_results(method_list, reference_sequences,
+    #                      result_dir="/home/damiano/Projects/caid/data/results_raw",
+    #                      parsed_dir_err="/home/damiano/Projects/caid/data/results_parsed_err",
+    #                      parsed_dir="/home/damiano/Projects/caid/data/results_parsed",
+    #                      overwrite_output=False)
 
-    # TODO calculate DynaMine
-    # Print the {id: name} dictionary
+    # Print the dictionary {id: name}
     for method in method_list:
         print("{}\t{}\t{}".format(method['id'], method['name'], method.get('use_conservation', False)))
 
-
+    # TODO calculate DynaMine
+    # TODO chek opposite predictions (see rocs)
+    # TODO check wallner confidence (python3)
+    # TODO check ANCHOR/IUPRED
+    # TODO check MorfChibi qsub (wrong target IDs)

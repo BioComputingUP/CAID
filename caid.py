@@ -42,7 +42,7 @@ if __name__ == '__main__':
     conf = parse_config(args.conf)
     set_logger(args.log, args.logLevel)
 
-    pred_dir = conf.get('prj_directories', 'results')
+    pred_dir = conf.get('data_directories', 'results')
     pred_files = make_pfile_list(pred_dir, args.pattern, args.mode)
 
     main(parse_eval_args(build_args(args, pred_files)))
