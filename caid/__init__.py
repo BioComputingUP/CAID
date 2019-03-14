@@ -35,35 +35,7 @@ def set_logger(logfile, level):
                         handlers=handlers)
 
 
-def parse_args(wd):
-    parser = argparse.ArgumentParser(
-        prog='caid-assess', description="CAID: Critical Assessment of Intrinsic Disorder",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('mode', choices=['disorder', 'binding', 'test'],
-                        help='category for which to produce caid-uniformed prediction files')
-
-    parser.add_argument('reference',
-                        help='reference file to which predictions are to be compared')
-
-    parser.add_argument('-s', '--strictNegatives', action='store_true', default=False,
-                        help="path to an alternative configuration file.")
-    parser.add_argument('-o', '--outputDir', help='directory where the output will be written',
-                        default='.')
-    parser.add_argument('-d', '--codes', action='store_true', default=False)
-    # config file
-    parser.add_argument('-c', '--conf', type=str,
-                        default=os.path.join(wd, 'config.ini'),
-                        help="path to an alternative configuration file.")
-    parser.add_argument('-p', '--pattern', default=None)
-    # log options
-    parser.add_argument('-l', '--log', type=str, default=None, help='log file')
-    parser.add_argument("-ll", "--logLevel", default="ERROR",
-                        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-                        help='log level filter. All levels <= choice will be displayed')
-
-    args = parser.parse_args()
-    return args
 
 
 def parse_args_plots(wd):

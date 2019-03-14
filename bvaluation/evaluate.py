@@ -1,5 +1,6 @@
 # module imports
 import os
+import sys
 import numpy as np
 import logging
 import warnings
@@ -7,40 +8,60 @@ import pandas as pd
 import argparse
 # function imports
 from itertools import groupby
+from typing import Iterable, Generator, Tuple
+
+# TODO: is this a solution? seems so
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+
 # relative imports
 from bvaluation.assessment import set_logger, load_names
 from bvaluation.assessment.dataset import ReferencePool, PredictionEntry
 from bvaluation.assessment.evaluation import Evaluation
 from bvaluation.assessment.dataset import Reference, Prediction
 
+
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
-def parse_args(arglist=None):
+def parse_args(arglist: list = None):
+    """
+    Parse command line arguments or arguments passed as a list
+
+    :param arglist: list of string representing command line arguments
+    :return: arguments namespace
+    """
     parser = argparse.ArgumentParser(
         prog='evaluate.py', description="Binary evaluation package",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
+    # positional arguments
     parser.add_argument('reference',
                         help='reference file to which predictions are to be compared')
 
     parser.add_argument('prediction', nargs='+',
                         help='file(s) containing binary predictions for reference targets.')
 
-    parser.add_argument('-s', '--strictNegatives', action='store_true', default=False,
-                        help="filter out (of ref and pred) all unlabeled positions "
-                             "in reference ('-')")
-    parser.add_argument('-o', '--outputDir', help='directory where the output will be written',
-                        default='.')
-    parser.add_argument('-b', '--labels', help='text file with prediction file name (without path) and label '
-                                               'desired in output organized in two columns')
+    # computation option
+    parser.add_argument('-r', '--replace_undefined', choices=['0', '1'], default=None,
+                        help='replace value for undefined positions (-) in reference. '
+                             'By default not applied')
+    # output options
+    parser.add_argument('-o', '--outdir', default='.',
+                        help='directory where the output will be written')
+    parser.add_argument('-b', '--labels',
+                        help='text file with prediction file name (without path) and label desired '
+                             'in output organized in two columns')
+
+    # output filename options
     parser.add_argument('--prefix', help='prefix of the output files basename', default=None)
     parser.add_argument('--suffix', help='suffix of the output files basename', default=None)
+    parser.add_argument('-n', '--name_structure', nargs='*', default=['a', 'b'], choices=['a', 'b'],
+                        help='strucutre of the output file name. a: undefined replace value; '
+                             'b: reference basename. By default \'a, b\'.')
 
     # log options
     parser.add_argument('-l', '--log', type=str, default=None, help='log file')
-    parser.add_argument("-ll", "--logLevel", default="ERROR",
+    parser.add_argument("-ll", "--log_level", default="ERROR",
                         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
                         help='log level filter. All levels <= choice will be displayed')
 
@@ -48,16 +69,31 @@ def parse_args(arglist=None):
     return args
 
 
-def strip_split(string: str, expected=None):
+def strip_split(string: str, expected: int = None) -> list:
+    """
+    remove newlines and split by tabs, raise an error for unexpected number of elements from split
+
+    :param string: string to modify
+    :param expected: number of elements expected splitting the string by tabs
+    :return: splitted string
+    """
     if string:
-        s = string.strip('\n').rsplit('\t')
-        if expected and len(s) != expected:
-            logging.error('expecting %i elements from split, got %i', expected, len(s))
-            raise ValueError('expecting %i elements from split, got %i', expected, len(s))
-        return s
+        splitted = string.strip('\n').rsplit('\t')
+        if expected and len(splitted) != expected:
+            logging.error('expecting %i elements from split, got %i', expected, len(splitted))
+            raise ValueError('expecting %i elements from split, got %i', expected, len(splitted))
+        return splitted
 
 
-def parse_prediction_file(predfile: str, reference_ids):
+def parse_prediction_file(predfile: str, reference_ids: Iterable) -> Generator:
+    """
+    Lazy load predictions for one target at the time from file
+
+    :param predfile: file containing predictions for targets
+    :param reference_ids: filter targets by their presence in reference
+    :return: predictions per target
+    :rtype: Generator
+    """
     reference_ids = set(reference_ids)
 
     with open(predfile) as fhandle:
@@ -67,32 +103,78 @@ def parse_prediction_file(predfile: str, reference_ids):
             body = next(faiter)
             if header in reference_ids:
                 try:
-                    positions, residues, scores, states = zip(*map(strip_split, body))
+                    positions, _, scores, states = zip(*map(strip_split, body))
                 except ValueError:
                     logging.error('error while parsing prediction %s', header)
                     raise ValueError('error while parsing prediction %s', header)
 
-                pred_entry = PredictionEntry(positions, residues, scores, states)
+                pred_entry = PredictionEntry(positions, scores, states)
                 yield header, pred_entry
 
 
-def iterate_prediction_files(pred_files: list):
+def iterate_prediction_files(pred_files: list) -> Generator:
+    """
+    Lazy load prediction files
+
+    :param pred_files: list of prediction files
+    :type pred_files:
+    :return: prediction files
+    :rtype: Generator
+    """
     for pred_file in pred_files:
         pred_name = os.path.basename(os.path.splitext(pred_file)[0])
         yield pred_file, pred_name
 
 
-def build_output_basename(reference: str, strict_negs: bool, outdir: str, prefix: str = None, suffix: str = None):
-    basename = '{}_'.format(prefix) if prefix else ''
-    basename += '{}-negs_'.format('str' if strict_negs is True else 'len')
-    basename += os.path.splitext(os.path.basename(reference))[0].replace('_', '-')
-    basename = os.path.join(os.path.abspath(outdir), basename)
-    basename += '{}_'.format(suffix) if suffix else ''
+def build_output_basename(reference: str, undef_repl: int, outdir: str,
+                          name_structure: Iterable[str],
+                          prefix: str = None, suffix: str = None) -> str:
+    """
+    Compose output file basename based on input and parameters
+
+    :param reference: reference file
+    :param undef_repl: value (if any) with which to replace undefined in reference
+    :param outdir: path to output dir
+    :param name_structure: structure of the output file basename
+    :param prefix: prefix of the output basename
+    :param suffix: suffix of the output basename
+    :return: outout basename
+    """
+    basename = list()
+
+    name_composer = {'a': 'urv-{}'.format(undef_repl),
+                     'b': os.path.splitext(os.path.basename(reference))[0]}
+
+    if undef_repl is None:
+        del name_composer['a']
+
+    if prefix is not None:
+        basename.append(prefix)
+
+    for label in name_structure:
+        if label in name_composer:
+            basename.append(name_composer[label])
+        else:
+            logging.warning('A relevant option is absent from the name composition')
+
+    if suffix is not None:
+        basename.append(suffix)
+
+    basename = os.path.join(os.path.abspath(outdir), '_'.join(basename))
     logging.info('output basename %s', basename)
     return basename
 
 
-def evaluate(reference_dataset: ReferencePool, pred_file: str, lbl: str):
+def evaluate(reference_dataset: ReferencePool,
+             pred_file: str, lbl: str) -> Tuple[Evaluation, Evaluation, float]:
+    """
+    Evaluate predictions coming from a single file against the reference
+
+    :param reference_dataset: reference pool
+    :param pred_file: path to prediction file
+    :param lbl: evaluation label
+    :return: evaluation, ROC-based evaluation, prediction coverage
+    """
     evl, roc_evl = None, None
     prediction = Prediction()
     reference = Reference()
@@ -141,26 +223,43 @@ def evaluate(reference_dataset: ReferencePool, pred_file: str, lbl: str):
     return evl, roc_evl, prediction.coverage
 
 
-def main(cm_args):
-    # make reference path absolute
-    cm_args.reference = os.path.abspath(cm_args.reference)
-    # check if reference file exist: raise an error if it doesn't
-    if not os.path.isfile(cm_args.reference):
-        logging.critical('File not found %s', cm_args.reference)
-        raise FileNotFoundError(cm_args.reference)
-    # setup logger configurations
-    set_logger(cm_args.log, cm_args.logLevel)
-    # build output basename based on command line arguments
-    output_basename = build_output_basename(cm_args.reference, cm_args.strictNegatives, cm_args.outputDir,
-                                            cm_args.prefix, cm_args.suffix)
-    # load labels to be used as classifier names in output
-    labels = load_names(cm_args.labels) if cm_args.labels else dict()
-    # log initialization data
-    logging.info('reference: %s', cm_args.reference)
-    logging.info('predicition(s): %s', ' '.join(cm_args.prediction))
-    logging.info('negative definition: %s', 'strict' if cm_args.strictNegatives is True else 'lenient')
+def bvaluation(reference: str, prediction: list, outdir: str, prefix: str = None,
+               suffix: str = None, replace_undefined: int = None,
+               name_structure: Iterable[str] = ('a', 'b'), labels: str = None, log: str = None, log_level="ERROR"):
+    """
+    Evaluate one or more prediction files against a given reference
 
-    ref_pool = ReferencePool(cm_args.reference, strict_negatives=cm_args.strictNegatives)
+    :param reference: reference file
+    :param prediction: one or more prediction files
+    :param outdir: path to output dir
+    :param prefix: prefix of output basename
+    :param suffix: suffix of output basename
+    :param replace_undefined: value (if any) with which to replace undefined elements in reference
+    :param name_structure: structure (presence and order) of elements in the output basename
+    :param labels: file containing labels associated to prediction files
+    :param log: log file
+    :param log_level: log level
+    """
+    # make reference path absolute
+    reference = os.path.abspath(reference)
+    # check if reference file exist: raise an error if it doesn't
+    if not os.path.isfile(reference):
+        logging.critical('File not found %s', reference)
+        raise FileNotFoundError(reference)
+    # setup logger configurations
+    set_logger(log, log_level)
+    # build output basename based on command line arguments
+    output_basename = build_output_basename(reference, replace_undefined,
+                                            outdir, name_structure,
+                                            prefix, suffix)
+    # load labels to be used as classifier names in output
+    labels = load_names(labels) if labels else dict()
+    # log initialization data
+    logging.info('reference: %s', reference)
+    logging.info('predicition(s): %s', ' '.join(prediction))
+    logging.info('undefined replaced with %s', replace_undefined)
+
+    ref_pool = ReferencePool(reference, replace_undefined)
 
     metrics_table = pd.DataFrame()
     metrics_table_r = pd.DataFrame()
@@ -168,7 +267,7 @@ def main(cm_args):
     roc_points = list()
     prc_points = list()
 
-    for prediction_file, predname in iterate_prediction_files(cm_args.prediction):
+    for prediction_file, predname in iterate_prediction_files(prediction):
         label = labels.get(os.path.basename(prediction_file), predname)
         evaluation, roc_evaluation, coverage = evaluate(ref_pool, prediction_file, label)
 
@@ -209,4 +308,4 @@ def main(cm_args):
 
 if __name__ == '__main__':
     # parse command line arguments
-    main(parse_args())
+    bvaluation(**vars(parse_args()))

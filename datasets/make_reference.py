@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import sys
 import os
 import numpy as np
 import json
@@ -7,12 +8,15 @@ import logging
 from datetime import datetime, date
 from collections import Counter
 from tempfile import NamedTemporaryFile
-from itertools import groupby, chain
+from itertools import groupby
 
-from launchers import fess, interproscan
+from launchers import interproscan
+from launchers import fess
 
-#TODO: make reference from predicted secondary structure
-#TODO: NORS by Rost
+
+# TODO: make reference from predicted secondary structure
+# TODO: NORS by Rost
+# TODO: filter polyproteins
 
 
 def parse_entries(disprot_entries_file):
@@ -38,8 +42,10 @@ def parse_entries(disprot_entries_file):
                     entry['last_edit_date'] = entry.get('last_edit_date')['$date']
 
                 # Fix date format
-                entry['last_edit_date'] = datetime.strptime(entry['last_edit_date'][:19], "%Y-%m-%dT%H:%M:%S")
-                entry['creation_date'] = datetime.strptime(entry['creation_date'][:19], "%Y-%m-%dT%H:%M:%S")
+                entry['last_edit_date'] = datetime.strptime(entry['last_edit_date'][:19],
+                                                            "%Y-%m-%dT%H:%M:%S")
+                entry['creation_date'] = datetime.strptime(entry['creation_date'][:19],
+                                                           "%Y-%m-%dT%H:%M:%S")
 
                 proteins[entry['disprot_id']] = entry
                 proteins[entry['disprot_id']]['regions'] = []
@@ -61,16 +67,11 @@ def filter_bad_entries(proteins):
     """
     ids = list(proteins.keys())
     for disprot_id in ids:  # Use keys to delete "proteins" keys while looping
-        if proteins[disprot_id].get('obsolete').get('reason_curator') or proteins[disprot_id].get('obsolete').get(
-                'reason_system'):
-            # print "{} {} OBSOLETE {}".format(disprot_id, proteins[disprot_id].get('uniprot_accession'),
-            #                                  proteins[disprot_id].get('obsolete').get(
-            #                                      'reason_curator'))
+        if proteins[disprot_id].get('obsolete').get('reason_curator') or proteins[disprot_id].get(
+                'obsolete').get('reason_system'):
             del proteins[disprot_id]
         else:
             if len(proteins[disprot_id]['regions']) == 0:
-                # print "{} {} ZERO REGIONS".format(disprot_id, proteins[disprot_id].get('uniprot_accession'))
-
                 del proteins[disprot_id]
             else:
                 # Classify bad/good regions
@@ -88,14 +89,6 @@ def filter_bad_entries(proteins):
 
                 # Proteins with only ambiguous regions
                 if len(good_regions) == 0:
-                    # print "{} {} ONLY BAD REGIONS. AMB {} SHORT {}".format(disprot_id,
-                    #                                                        proteins[disprot_id].get(
-                    #                                                            'uniprot_accession'),
-                    #                                                        len(bad_regions), len(short_regions))
-
-                    # for region in bad_regions:
-                    #     print region.get('tags')
-
                     del proteins[disprot_id]
 
                 else:
@@ -131,7 +124,8 @@ def get_identical_regions(proteins, same_region_outfile):
     for disprot_id in proteins:
         for region in proteins[disprot_id]['regions']:
             if region.get('tags') == [None]:
-                region_id = "{}-{}-{}-{}".format(region['pmid'], region['method']['id'], region['start'], region['end'])
+                region_id = "{}-{}-{}-{}".format(region['pmid'], region['method']['id'],
+                                                 region['start'], region['end'])
                 region_ids.setdefault(region_id, set())
                 region_ids[region_id].add(proteins[disprot_id]['disprot_id'])
             else:
@@ -149,20 +143,27 @@ def get_identical_regions(proteins, same_region_outfile):
                    "Proteins {}\nRegions {}\nUniRef90 {}\nUniRef50 {}\nPMID {}\n\n"
                    "Region ID\tDisProt IDs\n{}\n\n"
                    "DisProt ID\tRegions\n{}\n".format(
-            len(set([disprot_id for region_id in region_ids if len(region_ids[region_id]) > 1 for disprot_id in
-                    region_ids[region_id]])),
+            len(set([disprot_id for region_id in region_ids if len(region_ids[region_id]) > 1 for
+                     disprot_id in
+                     region_ids[region_id]])),
             len(set([region_id for region_id in region_ids if len(region_ids[region_id]) > 1])),
             len(set(
-                [proteins[disprot_id].get('uniref90') for region_id in region_ids if len(region_ids[region_id]) > 1 for
+                [proteins[disprot_id].get('uniref90') for region_id in region_ids if
+                 len(region_ids[region_id]) > 1 for
                  disprot_id in region_ids[region_id]])),
             len(set(
-                [proteins[disprot_id].get('uniref50') for region_id in region_ids if len(region_ids[region_id]) > 1 for
+                [proteins[disprot_id].get('uniref50') for region_id in region_ids if
+                 len(region_ids[region_id]) > 1 for
                  disprot_id in region_ids[region_id]])),
-            len(set([region_id.split('-')[0] for region_id in region_ids if len(region_ids[region_id]) > 1])),
-            "\n".join(sorted(["{}\t{}".format(region_id, ",".join(region_ids[region_id])) for region_id in region_ids if
-                              len(region_ids[region_id]) > 1])),
+            len(set([region_id.split('-')[0] for region_id in region_ids if
+                     len(region_ids[region_id]) > 1])),
             "\n".join(sorted(
-                ["{}\t{}".format(disprot_id, ",".join(list(disprot_ids[disprot_id]))) for disprot_id in disprot_ids]))
+                ["{}\t{}".format(region_id, ",".join(region_ids[region_id])) for region_id in
+                 region_ids if
+                 len(region_ids[region_id]) > 1])),
+            "\n".join(sorted(
+                ["{}\t{}".format(disprot_id, ",".join(list(disprot_ids[disprot_id]))) for disprot_id
+                 in disprot_ids]))
         ))
 
 
@@ -178,30 +179,29 @@ def write_fasta(proteins, outfile):
                   proteins[disprot_id]['sequence']))
 
 
-
 def write_sentences(proteins, outfile):
-
     with open(outfile, 'w') as fout:
-        fout.write("#disprot\tuniprot\tpmid\tmethod\tregion_start\tregion_end\ttype_or_section\ttext\n")
+        fout.write(
+            "#disprot\tuniprot\tpmid\tmethod\tregion_start\tregion_end\ttype_or_section\ttext\n")
         for disprot_id in proteins:
             protein = proteins[disprot_id]
             for region in protein['regions']:
                 if region.get('generif'):
-                    # print disprot_id, protein['uniprot_accession'], region['pmid'], region['method']['name'], region['start'], region['end'], region['generif']['loc'], region['generif']['text']
-                    fout.write("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(disprot_id, protein['uniprot_accession'], region['pmid'], region['method']['name'], region['start'], region['end'], region['generif']['loc'], region['generif']['text'].encode('utf-8')))
+                    fout.write("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(disprot_id, protein[
+                        'uniprot_accession'], region['pmid'], region['method']['name'],
+                                                                         region['start'],
+                                                                         region['end'],
+                                                                         region['generif']['loc'],
+                                                                         region['generif'][
+                                                                             'text'].encode(
+                                                                             'utf-8')))
 
 
-
-
-########################################################################################################################
-
-# TODO filter polyproteins
-def write_caid_references(proteins, outdir, label, ref_names):
-
+def write_caid_references_pdb(proteins, outdir, label, ref_names):
     data = {}
     for k in ref_names:
         data.setdefault(k, {})
-        data[k]['outf'] = open("{}/{}_{}.txt".format(outdir, label, k), 'w')
+        data[k]['outf'] = open("{}/{}-{}.txt".format(outdir, label, k), 'w')
 
     for disprot_id in proteins:
         protein = proteins[disprot_id]
@@ -211,13 +211,12 @@ def write_caid_references(proteins, outdir, label, ref_names):
         methods = []
         for region in protein['regions']:
             methods.append(region['method']['id'])
-            func_names = [f['name'].encode('utf8') for f in region['functions']]
+            func_names = [f['name'] for f in region['functions']]
             regions_names += func_names
 
-
         for k in ref_names:
+            key = k.split('_')[0]
             data[k]['state'] = ['-' for i in range(len(protein.get('sequence')))]
-            # print ">{} {}\n{}".format(disprot_id, protein.get('uniprot_accession'), protein.get('sequence'))
 
             # Assign pdb residues
             for ele in protein.get("mobidb", []).get("pdb_missing_residues", []):
@@ -226,68 +225,155 @@ def write_caid_references(proteins, outdir, label, ref_names):
                     for i in range(ele['start'] - 1, ele['end']):
                         data[k]['state'][i] = '0'
                 elif ele['ann'] == 'D':
-                    if k in ['pdb_missing']:
+                    if key in ['pdb-missing']:
                         for i in range(ele['start'] - 1, ele['end']):
                             data[k]['state'][i] = '1'
                 elif ele['ann'] == 'C':
                     pass
-# Assign positive labels (overwrite structure)
+
+            # Assign positive labels (overwrite structure)
             for region in protein['regions']:
                 method = region['method']['id']
                 func_names = [f['name'] for f in region['functions']]
-                # print region['start'], region['end'], method, func_names
 
                 for i in range(int(region['start']) - 1, int(region['end'])):
-                    if k in ['disprot_all']:
+                    if key in ['disprot-all']:
                         data[k]['state'][i] = '1'
 
                     if any('binding' in func_name.lower() for func_name in func_names):
-                        if k in ['disprot_binding']:
+                        if key in ['disprot-binding']:
                             data[k]['state'][i] = '1'
 
                     if any('rna' in func_name.lower() for func_name in func_names):
-                        if k in ['disprot_binding', 'disprot_binding_rna']:
+                        if key in ['disprot-binding', 'disprot-binding-rna']:
                             data[k]['state'][i] = '1'
 
                     if any('dna' in func_name.lower() for func_name in func_names):
-                        if k in ['disprot_binding', 'disprot_binding_dna']:
+                        if key in ['disprot-binding', 'disprot-binding-dna']:
                             data[k]['state'][i] = '1'
 
                     if any('protein-protein' in func_name.lower() for func_name in func_names):
-                        if k in ['disprot_binding', 'disprot_binding_prot']:
+                        if key in ['disprot-binding', 'disprot-binding-prot']:
                             data[k]['state'][i] = '1'
 
                     if any('linker' in func_name.lower() for func_name in func_names):
-                        if k in ['disprot_linker']:
+                        if key in ['disprot-linker']:
                             data[k]['state'][i] = '1'
 
                     if method == 'NMR':
-                        if k in ['disprot_primary', 'disprot_nmr']:
+                        if key in ['disprot-primary', 'disprot-nmr']:
                             data[k]['state'][i] = '1'
 
                     if method == 'XRAY':
-                        if k in ['disprot_primary', 'disprot_xray']:
+                        if key in ['disprot-primary', 'disprot-xray']:
                             data[k]['state'][i] = '1'
 
                     if method not in ['NMR', 'XRAY']:
-                        if k in ['disprot_secondary']:
+                        if key in ['disprot-secondary']:
+                            data[k]['state'][i] = '1'
+
+            # Write to file
+            if '1' in data[k]['state']:
+                data[k]['outf'].write(
+                    ">{} {} {} {} {}\n{}\n{}\n".format(disprot_id, protein['uniprot_accession'],
+                                                       ','.join(methods), ','.join(regions_names),
+                                                       ",".join(
+                                                           ["{}-{}:{}".format(ele['start'],
+                                                                              ele['end'],
+                                                                              ele['ann']) for ele in
+                                                            protein.get("mobidb", []).get(
+                                                                "pdb_missing_residues", [])]),
+                                                       protein['sequence'],
+                                                       ''.join(data[k]['state'])))
+
+
+def write_caid_references_simple(proteins, outdir, label, ref_names):
+    data = {}
+    for k in ref_names:
+        data.setdefault(k, {})
+        data[k]['outf'] = open("{}/{}-{}.txt".format(outdir, label, k), 'w')
+
+    for disprot_id in proteins:
+        protein = proteins[disprot_id]
+
+        # Region information
+        regions_names = []
+        methods = []
+        for region in protein['regions']:
+            methods.append(region['method']['id'])
+            func_names = [f['name'] for f in region['functions']]
+            regions_names += func_names
+
+        for k in ref_names:
+            key = k.split('_')[0]
+            data[k]['state'] = ['0' for _ in range(len(protein.get('sequence')))]
+
+            # Assign pdb residues
+            for ele in protein.get("mobidb", []).get("pdb_missing_residues", []):
+                if ele['ann'] == 'D':
+                    if key in ['pdb-missing']:
+                        for i in range(ele['start'] - 1, ele['end']):
+                            data[k]['state'][i] = '1'
+
+            # Assign positive labels (overwrite structure)
+            for region in protein['regions']:
+                method = region['method']['id']
+                func_names = [f['name'] for f in region['functions']]
+
+                for i in range(int(region['start']) - 1, int(region['end'])):
+                    if key in ['disprot-all']:
+                        data[k]['state'][i] = '1'
+
+                    if any('binding' in func_name.lower() for func_name in func_names):
+                        if key in ['disprot-binding']:
+                            data[k]['state'][i] = '1'
+
+                    if any('rna' in func_name.lower() for func_name in func_names):
+                        if key in ['disprot-binding', 'disprot-binding-rna']:
+                            data[k]['state'][i] = '1'
+
+                    if any('dna' in func_name.lower() for func_name in func_names):
+                        if key in ['disprot-binding', 'disprot-binding-dna']:
+                            data[k]['state'][i] = '1'
+
+                    if any('protein-protein' in func_name.lower() for func_name in func_names):
+                        if key in ['disprot-binding', 'disprot-binding-prot']:
+                            data[k]['state'][i] = '1'
+
+                    if any('linker' in func_name.lower() for func_name in func_names):
+                        if key in ['disprot-linker']:
+                            data[k]['state'][i] = '1'
+
+                    if method == 'NMR':
+                        if key in ['disprot-primary', 'disprot-nmr']:
+                            data[k]['state'][i] = '1'
+
+                    if method == 'XRAY':
+                        if key in ['disprot-primary', 'disprot-xray']:
+                            data[k]['state'][i] = '1'
+
+                    if method not in ['NMR', 'XRAY']:
+                        if key in ['disprot-secondary']:
                             data[k]['state'][i] = '1'
 
             # print "{:<25}{}".format(k, ''.join(data[k]['state']))
 
             # Write to file
             if '1' in data[k]['state']:
-                data[k]['outf'].write(">{} {} {} {} {}\n{}\n{}\n".format(disprot_id, protein['uniprot_accession'], ','.join(methods), ','.join(regions_names), ",".join(
-                ["{}-{}:{}".format(ele['start'], ele['end'], ele['ann']) for ele in
-                 protein.get("mobidb", []).get("pdb_missing_residues", [])]), protein['sequence'], ''.join(data[k]['state'])))
-
-        # break
-
-    return
+                data[k]['outf'].write(
+                    ">{} {} {} {} {}\n{}\n{}\n".format(disprot_id, protein['uniprot_accession'],
+                                                       ','.join(methods), ','.join(regions_names),
+                                                       ",".join(
+                                                           ["{}-{}:{}".format(ele['start'],
+                                                                              ele['end'],
+                                                                              ele['ann']) for ele in
+                                                            protein.get("mobidb", []).get(
+                                                                "pdb_missing_residues", [])]),
+                                                       protein['sequence'],
+                                                       ''.join(data[k]['state'])))
 
 
 def caid_reference_stats(inputdir, label, ref_names):
-
     data = {}
     c = 0
     for k in ref_names:
@@ -318,13 +404,16 @@ def caid_reference_stats(inputdir, label, ref_names):
         regions_len = Counter()
         regions_len_long = 0
 
-
         for state in data[k]:
             regdist_str, regdist_str_size = count_regions(state)
             regdist_len, regdist_len_size = count_regions(state.replace('-', '0'))
 
-            regions_str_long += sum([1 if ann=='1' and (end - start + 1) >= 20 else 0 for start, end, ann in regdist_str_size])
-            regions_len_long += sum([1 if ann=='1' and (end - start + 1) >= 20 else 0 for start, end, ann in regdist_len_size])
+            regions_str_long += sum(
+                [1 if ann == '1' and (end - start + 1) >= 20 else 0 for start, end, ann in
+                 regdist_str_size])
+            regions_len_long += sum(
+                [1 if ann == '1' and (end - start + 1) >= 20 else 0 for start, end, ann in
+                 regdist_len_size])
 
             counts_str.update(Counter(state))
             regions_str.update(Counter(regdist_str))
@@ -334,21 +423,16 @@ def caid_reference_stats(inputdir, label, ref_names):
         tot_str = sum([counts_str[i] for i in counts_str])
         tot_len = sum([counts_len[i] for i in counts_len])
 
-        # print "{:<22}{:>5}{:>7}\t{}".format(k, len(data[k]), tot, "\t".join(["{}{:>5.2f}{:>7}".format(i, round(float(counts[i])/tot, 2), counts[i]) for i in counts]))
-        # print("{} {} {} {} {} {}".format(k, len(data[k]),
-        #                               tot_len, " ".join(["{} {} {} {}".format(i, regions_len[i], counts_len[i], round(float(counts_len[i]) / tot_len, 2)) for i in ['1', '0']]),
-        #                               tot_str, " ".join(["{} {} {} {}".format(i, regions_str[i], counts_str[i], round(float(counts_str[i]) / tot_str, 2)) for i in ['1', '0']])
-        #
-        #                               ))
-
         print("{} {} {} {} {} {}".format(k, len(data[k]),
-                                     tot_len,
-            "{} {} {} {} {}".format(counts_len['1'], counts_len['0'], regions_len['1'], regions_len['0'], regions_len_long),
-                                     tot_str,
-            "{} {} {} {} {}".format(counts_str['1'], counts_str['0'], regions_str['1'],
-                                                              regions_str['0'], regions_str_long)))
-
-    return
+                                         tot_len,
+                                         "{} {} {} {} {}".format(counts_len['1'], counts_len['0'],
+                                                                 regions_len['1'],
+                                                                 regions_len['0'],
+                                                                 regions_len_long), tot_str,
+                                         "{} {} {} {} {}".format(counts_str['1'], counts_str['0'],
+                                                                 regions_str['1'],
+                                                                 regions_str['0'],
+                                                                 regions_str_long)))
 
 
 def count_regions(state):
@@ -374,10 +458,13 @@ def blast_similarity(blastfile, new_targets, old_targets):
     data = {}
     with open(blastfile) as f:
         for line in f:
-            a, b, identity, al_len, mismatch, gapopen, qstart, qend, start, send, evalue, bitscore  = line.strip().split()
+            a, b, identity, al_len, mismatch, gapopen, \
+            qstart, qend, start, send, evalue, bitscore = line.strip().split()
 
-            l_a =  len(new_targets[a]['sequence']) if new_targets.get(a) else len(old_targets[a]['sequence'])
-            l_b =  len(new_targets[b]['sequence']) if new_targets.get(b) else len(old_targets[b]['sequence'])
+            l_a = len(new_targets[a]['sequence']) if new_targets.get(a) else len(
+                old_targets[a]['sequence'])
+            l_b = len(new_targets[b]['sequence']) if new_targets.get(b) else len(
+                old_targets[b]['sequence'])
             identity = 2.0 * (int(al_len) - int(mismatch)) * 100.0 / float(l_a + l_b)
 
             if a != b:
@@ -395,19 +482,21 @@ def write_fess_reference(proteins, outdir, label, ref_names):
     data = {}
     for k in ref_names:
         data.setdefault(k, {})
-        data[k]['outf'] = open("{}/{}_{}.txt".format(outdir, label, k), 'w')
+        data[k]['outf'] = open("{}/{}-{}.txt".format(outdir, label, k), 'w')
 
     for disprot_id in proteins:
         protein = proteins[disprot_id]
 
         f_fasta = NamedTemporaryFile(mode='w', delete=False)
-        f_fasta.write(">{} {}\n{}\n".format(disprot_id, protein.get('uniprot_accession'), protein.get('sequence')))
+        f_fasta.write(">{} {}\n{}\n".format(disprot_id, protein.get('uniprot_accession'),
+                                            protein.get('sequence')))
         f_fasta.close()
         # launch fess here
         out, err = fess.FessLauncher([f_fasta.name, '-b', '/home/marnec/usr/fess/bin64/']).run()
-        states = (np.fromiter(list(zip(*list(map(lambda s: s.split(), out.decode('utf8').split('\n')[5:]))[:-1]))[-1], dtype=float) >= 0.5).astype(int)
+        states = (np.fromiter(
+            list(zip(*list(map(lambda s: s.split(), out.decode('utf8').split('\n')[5:]))[:-1]))[-1],
+            dtype=float) >= 0.5).astype(int)
         states = list(states.astype(str))
-
 
         os.remove(f_fasta.name)
 
@@ -418,7 +507,6 @@ def write_fess_reference(proteins, outdir, label, ref_names):
             methods.append(region['method']['id'])
             func_names = [f['name'] for f in region['functions']]
             regions_names += func_names
-
 
         for k in ref_names:
             # Write to file
@@ -436,28 +524,42 @@ def write_fess_reference(proteins, outdir, label, ref_names):
                                                        protein['sequence'],
                                                        ''.join(data[k]['state'])))
 
-def write_gene3d_reference(proteins, outdir, label, ref_names):
-    data = {}
-    for k in ref_names:
-        data.setdefault(k, {})
-        data[k]['outf'] = open("{}/{}_{}.txt".format(outdir, label, k), 'w')
+def launch_iprscan(proteins):
 
     with NamedTemporaryFile(mode='w', delete=False) as f_fasta:
         for disprot_id in proteins:
             protein = proteins[disprot_id]
 
-            f_fasta.write(">{} {}\n{}\n".format(disprot_id, protein.get('uniprot_accession'), protein.get('sequence')))
+            f_fasta.write(">{} {}\n{}\n".format(disprot_id, protein.get('uniprot_accession'),
+                                                protein.get('sequence')))
 
-    ipr = interproscan.InterProScanLauncher([f_fasta.name])
-    out, err = ipr.run(bindir='/home/marnec/usr/interproscan-5.19-58.0/')
+    ipr = interproscan.InterProScanLauncher([f_fasta.name, '-o', '.'])
+    ipr.run(bindir='/home/marnec/usr/interproscan-5.19-58.0/')
 
-    for group in groupby(open('tmp4v8mcoyd.tsv'), key=lambda l: l.split()[0]):
+    return ipr.outfile
+
+
+def get_ipr_regions(ipr_outfile):
+    ipr_regions = {}
+    for group in groupby(open(ipr_outfile), key=lambda l: l.split()[0]):
         acc = group[0]
-        protein = proteins[acc]
-        states = ['1'] * len(protein['sequence'])
-        ranges = list(map(lambda s: list(map(int, s.strip('\n').split('\t')[6:8])), group[1]))
-        for r in ranges:
-            states[r[0] - 1: r[1]] = ['0'] * (r[1] - r[0] + 1)
+        regs = list(map(lambda s: list(map(int, s.strip('\n').split('\t')[6:8])), group[1]))
+        ipr_regions[acc] = regs
+    return ipr_regions
+
+
+def write_caid_references_gene3d(proteins, outdir, label, ref_names):
+    data = {}
+
+    ipr_annotation = launch_iprscan(proteins)
+    ipr_regs = get_ipr_regions(ipr_annotation)
+
+    for k in ref_names:
+        data.setdefault(k, {})
+        data[k]['outf'] = open("{}/{}-{}.txt".format(outdir, label, k), 'w')
+
+    for disprot_id in proteins:
+        protein = proteins[disprot_id]
 
         # Region information
         regions_names = []
@@ -468,21 +570,77 @@ def write_gene3d_reference(proteins, outdir, label, ref_names):
             regions_names += func_names
 
         for k in ref_names:
+            key = k.split('_')[0]
+            data[k]['state'] = ['-' for i in range(len(protein.get('sequence')))]
+
+            # Assign pdb residues
+            for ele in protein.get("mobidb", []).get("pdb_missing_residues", []):
+                if ele['ann'] == 'S':
+                    # Assign structure for all type of references
+                    for i in range(ele['start'] - 1, ele['end']):
+                        data[k]['state'][i] = '0'
+                elif ele['ann'] == 'D':
+                    if key in ['pdb-missing']:
+                        for i in range(ele['start'] - 1, ele['end']):
+                            data[k]['state'][i] = '1'
+                elif ele['ann'] == 'C':
+                    pass
+            # assign negatives from Gene3D
+            if protein['disprot_id'] in ipr_regs:
+                for r in ipr_regs[protein['disprot_id']]:
+                    data[k]['state'][r[0] - 1: r[1]] = ['0'] * (r[1] - r[0] + 1)
+            # Assign positive labels (overwrite structure)
+            for region in protein['regions']:
+                method = region['method']['id']
+                func_names = [f['name'] for f in region['functions']]
+
+                for i in range(int(region['start']) - 1, int(region['end'])):
+                    if key in ['disprot-all']:
+                        data[k]['state'][i] = '1'
+
+                    if any('binding' in func_name.lower() for func_name in func_names):
+                        if key in ['disprot-binding']:
+                            data[k]['state'][i] = '1'
+
+                    if any('rna' in func_name.lower() for func_name in func_names):
+                        if key in ['disprot-binding', 'disprot-binding-rna']:
+                            data[k]['state'][i] = '1'
+
+                    if any('dna' in func_name.lower() for func_name in func_names):
+                        if key in ['disprot-binding', 'disprot-binding-dna']:
+                            data[k]['state'][i] = '1'
+
+                    if any('protein-protein' in func_name.lower() for func_name in func_names):
+                        if key in ['disprot-binding', 'disprot-binding-prot']:
+                            data[k]['state'][i] = '1'
+
+                    if any('linker' in func_name.lower() for func_name in func_names):
+                        if key in ['disprot-linker']:
+                            data[k]['state'][i] = '1'
+
+                    if method == 'NMR':
+                        if key in ['disprot-primary', 'disprot-nmr']:
+                            data[k]['state'][i] = '1'
+
+                    if method == 'XRAY':
+                        if key in ['disprot-primary', 'disprot-xray']:
+                            data[k]['state'][i] = '1'
+
+                    if method not in ['NMR', 'XRAY']:
+                        if key in ['disprot-secondary']:
+                            data[k]['state'][i] = '1'
+
             # Write to file
-            data[k]['state'] = states
             if '1' in data[k]['state']:
                 data[k]['outf'].write(
-                    ">{} {} {} {} {}\n{}\n{}\n".format(acc, protein['uniprot_accession'],
-                                                       ','.join(methods), ','.join(regions_names),
-                                                       ",".join(
-                                                           ["{}-{}:{}".format(ele['start'],
-                                                                              ele['end'],
-                                                                              ele['ann']) for ele in
-                                                            protein.get("mobidb", []).get(
-                                                                "pdb_missing_residues", [])]),
+                    ">{} {} {} {} {}\n{}\n{}\n".format(disprot_id, protein['uniprot_accession'],
+                                                       ','.join(methods),
+                                                       ','.join(regions_names), ",".join(
+                            ["{}-{}:{}".format(ele['start'], ele['end'], ele['ann']) for ele in
+                             protein.get("mobidb", []).get("pdb_missing_residues", [])]),
                                                        protein['sequence'],
                                                        ''.join(data[k]['state'])))
-
+    os.remove(ipr_annotation)
 
 ########################################################################################################################
 # UniRef statistic
@@ -520,25 +678,32 @@ logging.info("old proteins %i", len(old_prot))
 
 # CAID ######################
 # Types of reference
-# reference_names = ['disprot_all', 'pdb_missing',
-#                    'disprot_xray', 'disprot_nmr', 'disprot_primary', 'disprot_secondary',
-#                    'disprot_linker',
-#                    'disprot_binding', 'disprot_binding_dna', 'disprot_binding_rna', 'disprot_binding_prot']
+# reference_names = ['disprot-all', 'pdb_missing',
+#                    'disprot-xray', 'disprot-nmr', 'disprot-primary', 'disprot-secondary',
+#                    'disprot-linker',
+#                    'disprot-binding', 'disprot-binding-dna', 'disprot-binding-rna', 'disprot-binding-prot']
 
-reference_names = ['disprot_all',
-                   'disprot_xray', 'disprot_nmr', 'disprot_primary', 'disprot_secondary',
-                   'disprot_linker',
-                   'disprot_binding', 'pdb_missing']
+reference_names = ['disprot-all',
+                   'disprot-xray', 'disprot-nmr', 'disprot-primary', 'disprot-secondary',
+                   'disprot-linker',
+                   'disprot-binding', 'pdb-missing']
 
-# write_caid_references(new_prot, '../data/reference', 'new', reference_names)
-# write_caid_references(old_prot, '../data/reference', 'old', reference_names)
+reference_names_pdb = list(map(lambda s: s + '_pdb', reference_names))
+reference_names_gene3d = list(map(lambda s: s + '_gene3d', reference_names))
+reference_names_simple = list(map(lambda s: s + '_simple', reference_names))
+
+write_caid_references_simple(new_prot, '../data/disorder', 'new', reference_names_simple)
+write_caid_references_simple(old_prot, '../data/disorder', 'old', reference_names_simple)
+write_caid_references_pdb(new_prot, '../data/disorder', 'new', reference_names_pdb)
+write_caid_references_pdb(old_prot, '../data/disorder', 'old', reference_names_pdb)
+write_caid_references_gene3d(new_prot, '../data/disorder', 'new', reference_names_gene3d)
+write_caid_references_gene3d(old_prot, '../data/disorder', 'old', reference_names_gene3d)
 
 
 # write_fess_reference(new_prot, '../data/disorder', 'new', ['fess'])
-write_gene3d_reference(new_prot, '../data/disorder', 'new', ['gene3d'])
 
 
-# caid_reference_stats('../data/reference', 'new', reference_names)
+caid_reference_stats('../data/reference', 'new', reference_names)
 # caid_reference_stats('../data/reference', 'old', reference_names)
 
 

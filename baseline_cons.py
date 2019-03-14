@@ -1,11 +1,11 @@
 import os
 import logging
 import numpy as np
-import pandas as pd
+import argparse
 # relative imports
-from caid import parse_config, parse_args, set_logger, load_names
-from caid.dataset import ReferencePool
-from bvaluation.evaluate import evaluate
+from caid import parse_config, set_logger
+from bvaluation.evaluate import parse_args as parse_eval_args, bvaluation, build_output_basename
+from bvaluation.assessment.dataset import ReferencePool
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -45,7 +45,7 @@ def js_divergence(freqs, bg_distr):
 
 def conservation_based_prediction(loaded_ref, outbase, background_freqs):
     logging.info('building baseline distance from blosum62 frequencies')
-    fname = '{}.txt'.format(outbase)
+    fname = '{}_cons.txt'.format(outbase)
 
     with open(fname, 'w') as fhandle:
         for acc, data in loaded_ref.items():
@@ -72,62 +72,60 @@ def conservation_based_prediction(loaded_ref, outbase, background_freqs):
     return fname
 
 
+def build_args(options, predfiles, output_basename):
+    optns = [options.reference] + predfiles + ['-l', options.log,
+                                               '-ll', options.logLevel,
+                                               '-o', output_basename,
+                                               '--suffix', 'cons']
+    if options.replaceUndefined is not None:
+        optns.extend(['-r', options.replaceUndefined])
+
+    return optns
+
+
+def parse_args(wd):
+    parser = argparse.ArgumentParser(
+        prog='caid-assess', description="CAID: Critical Assessment of Intrinsic Disorder",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    parser.add_argument('reference',
+                        help='reference file to which predictions are to be compared')
+
+    parser.add_argument('-r', '--replaceUndefined', choices=['0', '1'], default=None,
+                        help='replace value for undefined positions (-) in reference. '
+                             'By default not applied')
+    parser.add_argument('-c', '--conf', type=str,
+                        default=os.path.join(wd, 'config.ini'),
+                        help="path to an alternative configuration file.")
+
+    parser.add_argument('-l', '--log', type=str, default=None, help='log file')
+    parser.add_argument("-ll", "--logLevel", default="ERROR",
+                        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+                        help='log level filter. All levels <= choice will be displayed')
+
+    args = parser.parse_args()
+    return args
+
+
 if __name__ == '__main__':
     args = parse_args(SCRIPT_DIR)
     conf = parse_config(args.conf)
     set_logger(args.log, args.logLevel)
-    pssm_dir = dict(conf.items('prj_directories'))['pssm']
-    outdir = dict(conf.items('prj_directories'))['baseline']
-    names = load_names(os.path.join(SCRIPT_DIR, 'caid_names.txt'))
-
-    code = 'cons'
+    pssm_dir = dict(conf.items('data_directories'))['pssm']
+    # outdir = dict(conf.items('data_directories'))['baseline']
+    outdir = ''
     ref = ReferencePool(os.path.abspath(args.reference),
-                        strict_negatives=args.strictNegatives)
+                        undefined_replace_value=args.replaceUndefined)
 
-    output_basename = os.path.join(outdir,
-                                   os.path.splitext(
-                                       os.path.basename(args.reference))[0]
-                                   .replace('_', '-')) + '_{}'.format(code)
+    output_basename = build_output_basename(args.reference,
+                                            args.replaceUndefined, outdir, ['a', 'b'])
+
+    # negs = 'len-negs' if args.strictNegatives is False else 'str-negs'
+    # output_basename = os.path.join(outdir, '{}_{}_{}'.format(
+    #     negs,
+    #     os.path.splitext(os.path.basename(args.reference))[0].replace('_', '-'),
+    #     code
+    # ))
 
     pred_fname = conservation_based_prediction(ref, output_basename, blosum62_freqs)
-    evaluation, roc_evaluation, coverage = evaluate(ref, pred_fname, code)
-
-    metrics_table = pd.DataFrame()
-    metrics_table_r = pd.DataFrame()
-    perinstance_table = pd.DataFrame()
-    roc_points = list()
-    prc_points = list()
-
-    if evaluation is not None:
-        d = evaluation.get_scores_asdict()
-        d.update({'Cov': coverage})
-        metrics_table = pd.concat([metrics_table, pd.DataFrame(d, index=[code])],
-                                  axis=0, sort=False)
-
-        pis = pd.DataFrame(evaluation.get_perinstance_scores(insert=code))
-        colnames = pis.iloc[0][2:]
-        pis = pis.iloc[1:].rename(columns=colnames).set_index([0, 1]).astype(np.float)
-        perinstance_table = perinstance_table.append(pis, sort=False)
-
-    if roc_evaluation is not None:
-        roc, prc = evaluation.get_curves_repr().split('\n')
-        roc_points.append('{} {}'.format(code, roc))
-        prc_points.append('{} {}'.format(code, prc))
-
-        d = evaluation.get_scores_asdict()
-        d.update({'Cov': coverage})
-        metrics_table_r = pd.concat([metrics_table_r, pd.DataFrame(d, index=[code])],
-                                    axis=0, sort=False)
-
-    metrics_table.to_csv('{}_scores.csv'.format(output_basename), float_format='%.3f')
-    metrics_table_r.to_csv('{}_redefScores.csv'.format(output_basename), float_format='%.3f')
-    perinstance_table.to_csv('{}_perInstanceScores.csv'.format(output_basename),
-                             float_format='%.3f')
-
-    if roc_points:
-        with open('{}_rocPoints.txt'.format(output_basename), 'w') as f:
-            f.write('\n'.join(roc_points))
-
-    if prc_points:
-        with open('{}_prcPoints.txt'.format(output_basename), 'w') as f:
-            f.write('\n'.join(prc_points))
+    bvaluation(parse_eval_args(build_args(args, [pred_fname], outdir)))
