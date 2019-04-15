@@ -52,7 +52,7 @@ class Curve(object):
 class ROC(Curve):
     """Receiving Operator Characteristic for binary classification.
     <br>x axis = FPR
-    <br>y axis = TPR.
+    <br>y axis = TPR
     <br>More about ROC at https://en.wikipedia.org/wiki/Receiver_operating_characteristic"""
     def __init__(self, name=None, label=None):
         super(ROC, self).__init__(name, label)
@@ -70,6 +70,12 @@ class ROC(Curve):
 
 
 class PrecisionRecallCurve(Curve):
+    """
+    Precision-Recall curve for binary classification.
+    <br>x axis = Recall
+    <br>y axis = Precision
+    <br>More about ROC at https://en.wikipedia.org/wiki/Receiver_operating_characteristic
+    """
     def __init__(self, name=None, label=None):
         super(PrecisionRecallCurve, self).__init__(name, label)
 
