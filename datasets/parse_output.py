@@ -329,21 +329,29 @@ def parse_prediction_file(predfile):
 
 def write_parsed_results(methods, ref_seqs, **kwargs):
 
-    # result_dir = "/mnt/projects"
-    # parsed_dir = "/home/damiano/results_parsed"
-    # result_dir = "/home/damiano/Projects/caid/data/results_raw"
-    # parsed_dir_err = "/home/damiano/Projects/caid/data/results_parsed_err"
-    # parsed_dir = "/home/damiano/Projects/caid/data/results_parsed"
+    # Create local folder
+    if not os.path.exists(kwargs.get('parsed_dir_err')):
+        os.makedirs(kwargs.get('parsed_dir_err'))
+    if not os.path.exists(kwargs.get('parsed_dir')):
+        os.makedirs(kwargs.get('parsed_dir'))
 
-    # Parse jron separately
-    inputfile = "{}/{}/{}".format(kwargs.get('result_dir'), methods['jron']['result_dir'], methods['jron']['result_file'])
-    jronn_data = parse_jronn(inputfile, methods['jronn'])
+    # Parse JRONN separately as the entire ouput is in a single file
+    method = next(filter(lambda x: x['name'] == 'JRONN', methods))
+    inputfile = "{}/{}/{}".format(kwargs.get('raw_results_dir'), method['group'], method['outfile'])
+    jronn_data = parse_jronn(inputfile, method)
+    print(inputfile)
 
     for method in methods:
-        # inputpath = "{}/CAID/2018_09/{}/results/{}".format(result_dir, method['group'], method['result_dir'])
-        inputpath = "{}/{}".format(kwargs.get('result_dir'), method['result_dir'])
-        errfile = "{}/{}_{}_{}{}.err".format(kwargs.get('parsed_dir_err'), method['id'], method['group'], method['result_dir'], method.get('label', ''))
-        outfile = "{}/{}_{}_{}{}.out".format(kwargs.get('parsed_dir'), method['id'], method['group'], method['result_dir'], method.get('label', ''))
+
+        # Output files
+        errfile = "{}/{}_{}_{}.err".format(kwargs.get('parsed_dir_err'), method['id'], method['group'], method['name'])
+        outfile = "{}/{}_{}_{}.out".format(kwargs.get('parsed_dir'), method['id'], method['group'], method['name'])
+
+        # Remote dir mounted from NAS
+        inputpath = "{}/{}/results/{}".format(kwargs.get('raw_results_dir'), method['group'], method['result_dir'])
+
+        print(inputpath, outfile)
+
         if not os.path.isfile(outfile) or kwargs.get('overwrite_output'):
             with open(errfile, 'w') as ferr:
                 if method['func'] is not None:
@@ -431,8 +439,7 @@ if __name__ == "__main__":
         {'id': 'B001', 'group': 'dosztanyi', 'name': 'ANCHOR', 'result_dir': 'anchor', 'extension': '.fasta.out', 'func': parse_anchor},
         {'id': 'D003', 'group': 'dosztanyi', 'name': 'IUPred2A-long', 'result_dir': 'iupred2al', 'extension': '.fasta.out', 'func': parse_vertical_format, 'header_lines': 6, 'residue_pos': 1, 'score_pos': 2, 'status_th': 0.5},
         {'id': 'D004', 'group': 'dosztanyi', 'name': 'IUPred2A-short', 'result_dir': 'iupred2as', 'extension': '.fasta.out', 'func': parse_vertical_format, 'header_lines': 6, 'residue_pos': 1, 'score_pos': 2, 'status_th': 0.5},
-        {'id': 'B002', 'group': 'dosztanyi', 'name': 'IUPred2A-long', 'result_dir': 'iupred2al', 'extension': '.fasta.out', 'label': '_binding', 'func': parse_vertical_format, 'header_lines': 6, 'residue_pos': 1, 'score_pos': 3, 'status_th': 0.5},
-        {'id': 'B003', 'group': 'dosztanyi', 'name': 'IUPred2A-short', 'result_dir': 'iupred2as', 'extension': '.fasta.out', 'label': '_binding', 'func': parse_vertical_format, 'header_lines': 6, 'residue_pos': 1, 'score_pos': 3, 'status_th': 0.5},
+        {'id': 'B002', 'group': 'dosztanyi', 'name': 'ANCHOR-2', 'result_dir': 'iupred2al', 'extension': '.fasta.out', 'func': parse_vertical_format, 'header_lines': 6, 'residue_pos': 1, 'score_pos': 3, 'status_th': 0.5},
         {'id': 'D005', 'group': 'dosztanyi', 'name': 'IUPred-long', 'result_dir': 'iupredl', 'extension': '.flat.out', 'func': parse_vertical_format, 'header_lines': 0, 'residue_pos': 1, 'score_pos': 2, 'status_th': 0.5},
         {'id': 'D006', 'group': 'dosztanyi', 'name': 'IUPred-short', 'result_dir': 'iupreds', 'extension': '.flat.out', 'func': parse_vertical_format, 'header_lines': 2, 'residue_pos': 1, 'score_pos': 2, 'status_th': 0.5},
         {'id': 'D007', 'group': 'galzitskaya', 'name': 'FoldUnfold', 'result_dir': 'foldunfold', 'extension': '.out', 'func': parse_foldunfold, 'make_complement': True},
@@ -473,25 +480,28 @@ if __name__ == "__main__":
     ]
 
     # Mount caid folder somewhere
-    # sudo mount 172.21.2.101:/volume1/Projects projects
     # From IDRA
-    # sudo sshfs dampiove@protein.bio.unipd.it:/projects /mnt/projects/ -o IdentityFile='/home/damiano/.ssh/id_rsa',allow_other
+    # (obsolete) sudo sshfs dampiove@protein.bio.unipd.it:/projects /mnt/projects/ -o IdentityFile='/home/damiano/.ssh/id_rsa',allow_other
+    # sudo mount 172.21.2.103:/volume1/Pleiadi/projects/CAID/2018_09 /home/damiano/Projects/caid_data/remote/
 
     # Parse reference sequences
-    reference_sequences = parse_reference_sequences("/home/damiano/Projects/caid/data/disprot8_all.fasta")
+    reference_sequences = parse_reference_sequences("/home/damiano/Projects/caid_data/remote/disprot/disprot8_all.fasta")
 
-    # write_parsed_results(method_list, reference_sequences,
-    #                      result_dir="/home/damiano/Projects/caid/data/results_raw",
-    #                      parsed_dir_err="/home/damiano/Projects/caid/data/results_parsed_err",
-    #                      parsed_dir="/home/damiano/Projects/caid/data/results_parsed",
-    #                      overwrite_output=False)
+    write_parsed_results(method_list,
+                         reference_sequences,
+                         raw_results_dir="/home/damiano/Projects/caid_data/remote",
+                         parsed_dir_err="/home/damiano/Projects/caid_data/results_parsed_err",
+                         parsed_dir="/home/damiano/Projects/caid_data/results_parsed",
+                         overwrite_output=False)
+
 
     # Print the dictionary {id: name}
-    for method in method_list:
-        print("{}\t{}\t{}".format(method['id'], method['name'], method.get('use_conservation', False)))
+    # for method in method_list:
+    #     print("{}\t{}\t{}".format(method['id'], method['name'], method.get('use_conservation', False)))
 
     # TODO calculate DynaMine
     # TODO chek opposite predictions (see rocs)
     # TODO check wallner confidence (python3)
     # TODO check ANCHOR/IUPRED
     # TODO check MorfChibi qsub (wrong target IDs)
+
