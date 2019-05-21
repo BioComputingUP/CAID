@@ -1,9 +1,13 @@
 import os
+import sys
 import argparse
 
-from plotting.curve import draw_curves
-from plotting.scatter import draw_auc_scatterplot
-from plotting.heatmap import draw_per_instance_heatmap
+# TODO: is this a solution? seems so
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+
+from bvaluation.plotting.curve import draw_curves
+from bvaluation.plotting.scatter import draw_auc_scatterplot
+from bvaluation.plotting.heatmap import draw_per_instance_heatmap
 
 
 def check_args_consistency(plots, roc_files, prc_files, instance_scores, **kwargs):

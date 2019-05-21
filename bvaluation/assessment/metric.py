@@ -3,6 +3,7 @@ import logging
 import numpy as np
 from math import sqrt
 from sklearn import metrics
+from operator import itemgetter
 
 
 class Metric(object):
@@ -35,7 +36,8 @@ class AreaUnderTheCurve(object):
         if x.size != 0 and y.size != 0:
             x = copy.copy(x)
             y = copy.copy(y)
-            self.amount = metrics.auc(sorted(x), sorted(y))
+            x, y = zip(*sorted(zip(x, y), key=itemgetter(0)))
+            self.amount = metrics.auc(x, y)
         else:
             self.amount = np.nan
 
@@ -60,7 +62,7 @@ class BalancedAccuracy(Metric):
             n = n if n != 0 else self.pseudocount
 
         try:
-            self.amount = (tp / p + tn / n) / 2
+            self.amount = ((tp / p) + (tn / n)) / 2
         except ZeroDivisionError:
             self.amount = np.nan
 
@@ -183,7 +185,67 @@ class FalsePositiveRate(Metric):
             self.amount = np.nan
 
     def from_states(self, ytrue, ypred):
-        self.from_confusion_matrix(metrics.confusion_matrix(ytrue, ypred))
+        self.from_confusion_matrix(
+            metrics.confusion_matrix(ytrue, ypred, labels=(0, 1)).astype(np.float))
 
+
+class TrueNegative(Metric):
+    name = 'True Negative'
+    label = 'TN'
+
+    def __init__(self, robust=False, name=None, label=None):
+        super(TrueNegative, self).__init__(robust, name, label)
+
+    def from_confusion_matrix(self, conf_mat):
+        self.amount = conf_mat.ravel()[0]
+
+    def from_states(self, ytrue, ypred):
+        self.from_confusion_matrix(
+            metrics.confusion_matrix(ytrue, ypred, labels=(0, 1)).astype(np.float))
+
+
+class FalsePositive(Metric):
+    name = 'False Positive'
+    label = 'FP'
+
+    def __init__(self, robust=False, name=None, label=None):
+        super(FalsePositive, self).__init__(robust, name, label)
+
+    def from_confusion_matrix(self, conf_mat):
+        self.amount = conf_mat.ravel()[1]
+
+    def from_states(self, ytrue, ypred):
+        self.from_confusion_matrix(
+            metrics.confusion_matrix(ytrue, ypred, labels=(0, 1)).astype(np.float))
+
+
+class FalseNegative(Metric):
+    name = 'False Negative'
+    label = 'FN'
+
+    def __init__(self, robust=False, name=None, label=None):
+        super(FalseNegative, self).__init__(robust, name, label)
+
+    def from_confusion_matrix(self, conf_mat):
+        self.amount = conf_mat.ravel()[-2]
+
+    def from_states(self, ytrue, ypred):
+        self.from_confusion_matrix(
+            metrics.confusion_matrix(ytrue, ypred, labels=(0, 1)).astype(np.float))
+
+
+class TruePositive(Metric):
+    name = 'True Positive'
+    label = 'TP'
+
+    def __init__(self, robust=False, name=None, label=None):
+        super(TruePositive, self).__init__(robust, name, label)
+
+    def from_confusion_matrix(self, conf_mat):
+        self.amount = conf_mat.ravel()[-1]
+
+    def from_states(self, ytrue, ypred):
+        self.from_confusion_matrix(
+            metrics.confusion_matrix(ytrue, ypred, labels=(0, 1)).astype(np.float))
 
 

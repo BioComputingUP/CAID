@@ -1,4 +1,5 @@
 import logging
+import copy
 import numpy as np
 from itertools import groupby, chain
 
@@ -90,7 +91,7 @@ class ReferenceEntry(ImmutableDict):
     def _build_entry(self, acc: str, s: np.array):
         dict.__setitem__(self, 'acc', acc)
         dict.__setitem__(self, 'states', s)
-
+        
 
 class PredictionEntry(ImmutableDict):
     """
@@ -181,7 +182,7 @@ class Prediction(object):
         self.accessions_set.add(acc)
 
     def set_coverage(self, ref_accs):
-        self.coverage = len(ref_accs & self.accessions_set) / len(ref_accs)
+        self.coverage = (len(ref_accs & self.accessions_set), len(ref_accs))
 
     def set_merged_states(self):
         self.mstates = np.fromiter(chain(*self.states), dtype=np.float)
@@ -192,3 +193,10 @@ class Prediction(object):
     def apply_cutoff(self, cutoff):
         self.states = [np.greater_equal(s, cutoff).astype(int) for s in self.scores]
         self.mstates = np.fromiter(chain(*self.states), dtype=np.float)
+
+    def zip(self):
+        return zip(self.accessions, self.states)
+
+
+    def copy(self):
+        return copy.deepcopy(self)

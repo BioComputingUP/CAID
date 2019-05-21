@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.metrics import auc as calc_auc
 # relative imports
-from plotting.curve import parse_curve_file
+from bvaluation.plotting.curve import parse_curve_file
 
 def get_auc_table(curve_files, labels=None, cutoff=None):
     # init table

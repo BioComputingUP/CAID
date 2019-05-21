@@ -78,6 +78,7 @@ class PrecisionRecallCurve(Curve):
     """
     def __init__(self, name=None, label=None):
         super(PrecisionRecallCurve, self).__init__(name, label)
+        self.fmax = None
 
     def calc_points(self, ytrue, yscore):
         if yscore.size != 0:
@@ -85,9 +86,16 @@ class PrecisionRecallCurve(Curve):
                                                                              yscore,
                                                                              pos_label=1)
             self.cutoff_youdens_j()
+            self.cutoff_fmax()
             self.auc_from_points()
         else:
             self.x = np.array([])
             self.y = np.array([])
             self.thresholds = np.array([])
             self.auc.amount = np.nan
+
+    def cutoff_fmax(self):
+        if self.x.size != 0 and self.x.size != 0 and self.thresholds.size != 0:
+            f_scores = 2 * ((self.y * self.x)/(self.y + self.x))
+            f_ordered = sorted(zip(f_scores, self.thresholds))
+            self.fmax = f_ordered[-1][1]
