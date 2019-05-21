@@ -8,7 +8,7 @@ import pandas as pd
 import argparse
 # function imports
 from itertools import groupby
-from typing import Iterable, Generator, Tuple
+from typing import Iterable, Generator, Tuple, List
 
 # TODO: is this a solution? seems so
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
@@ -159,7 +159,7 @@ def iterate_prediction_files(pred_files: list) -> Generator:
 
 
 def build_output_basename(reference: str, outdir: str,
-                          name_structure: Iterable[str],
+                          name_structure: List[str],
                           prefix: str = None, suffix: str = None) -> str:
     """
     Compose output file basename based on input and parameters

@@ -122,9 +122,8 @@ if __name__ == '__main__':
         suffix = "naive-self"
         pred = ref
 
-    output_basename = build_output_basename(args.reference, args.replaceUndefined,
-                                            args.outdir, ['a', 'b'], suffix=suffix)
+    output_basename = build_output_basename(args.reference, args.outdir, ['b'], suffix=suffix)
     pred_fname = naif_prediction(pred, output_basename)
 
-    bvaluation(ref_pool=args.reference, prediction=[pred_fname], outdir=args.outdir, suffix=suffix,
+    bvaluation(reference=args.reference, prediction=[pred_fname], outdir=args.outdir, suffix=suffix,
                replace_undefined=args.replaceUndefined, log=args.log, log_level=args.logLevel)

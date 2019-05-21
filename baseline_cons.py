@@ -118,8 +118,8 @@ if __name__ == '__main__':
                         undefined_replace_value=args.replaceUndefined)
 
     output_basename = build_output_basename(args.reference,
-                                            args.replaceUndefined, args.outdir, ['a', 'b'])
+                                            args.outdir, ['b'])
 
     pred_fname = conservation_based_prediction(ref, output_basename, blosum62_freqs)
-    bvaluation(ref_pool=args.reference, prediction=[pred_fname], outdir=args.outdir, suffix='cons',
+    bvaluation(reference=args.reference, prediction=[pred_fname], outdir=args.outdir, suffix='cons',
                replace_undefined=args.replaceUndefined, log=args.log, log_level=args.logLevel)

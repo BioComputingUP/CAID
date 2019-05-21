@@ -52,7 +52,7 @@ class ReferencePool(ImmutableDict):
                     seq, states = map(str.strip, next(faiter))
 
                     nastates = np.fromiter(map(self.pattern.get, states), dtype=float)
-                    ref_entry = ReferenceEntry(desc, nastates)
+                    ref_entry = ReferenceEntry(desc, nastates, seq)
                     dict.__setitem__(self, acc, ref_entry)
         logging.debug('ref pool: %s', self)
 
@@ -84,14 +84,15 @@ class ReferenceEntry(ImmutableDict):
     :param accession: reference entry accession
     :param nastates: states
     """
-    def __init__(self, accession: str, nastates: np.array):
+    def __init__(self, accession: str, nastates: np.array, seq: str):
         dict.__init__(self)
-        self._build_entry(accession, nastates)
+        self._build_entry(accession, nastates, seq)
 
-    def _build_entry(self, acc: str, s: np.array):
+    def _build_entry(self, acc: str, s: np.array, seq: str):
         dict.__setitem__(self, 'acc', acc)
         dict.__setitem__(self, 'states', s)
-        
+        dict.__setitem__(self, 'seq', seq)
+
 
 class PredictionEntry(ImmutableDict):
     """
