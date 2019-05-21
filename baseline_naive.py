@@ -1,6 +1,7 @@
 import os
 import logging
 import numpy as np
+import copy
 import argparse
 # relative imports
 from caid import parse_config, set_logger
@@ -9,12 +10,35 @@ from bvaluation.assessment.dataset import ReferencePool
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
-PSEUDOCOUNT = .0000001
 
-blosum62_freqs = {'S': 0.059, 'F': 0.044, 'V': 0.072, 'R': 0.051, 'K': 0.056, 'A': 0.078,
-                  'G': 0.083, 'N': 0.041, 'M': 0.024, 'E': 0.059, 'D': 0.052, 'C': 0.024,
-                  'Q': 0.034, 'H': 0.025, 'P': 0.043, 'Y': 0.034, 'W': 0.014, 'T': 0.055,
-                  'I': 0.062, 'L': 0.092}
+def tokenize(seq, n=7):
+    """
+    Tokenize an iterable in a series of adjacent windows
+
+    Yield a series of blobs of size n * 2 + 1 with the
+    actual residue in the middle.
+
+    For ending residues mirrored windows are added.
+
+    :param n: n * 2 + 1 is the size of the window
+    :type n: int
+    :return: an iterator of blobs
+    :rtype: iterator
+    """
+    lstates = len(seq)
+    n = n if n < lstates else lstates - 1
+
+    new_seq = copy.copy(seq[1:n + 1][::-1])  # Reversed start
+    new_seq += copy.copy(seq)
+    new_seq += copy.copy(seq[-n - 1:-1][::-1])  # Reversed end
+    seq = new_seq
+
+    for pos in range(n, len(seq) - n):
+        yield seq[pos - n:pos + n + 1]
+
+def get_scores_movingwindow(sequence):
+    tokens = list(tokenize(sequence))
+    return np.array(tokens).mean(axis=1)
 
 
 def save_prediction(ref_file, acc, seq, scores, states):
@@ -27,48 +51,20 @@ def save_prediction(ref_file, acc, seq, scores, states):
 
     ref_file.write('>{}\n'.format(acc))
     for i, (aa, sc, st) in enumerate(zip(seq, scores, states), 1):
-        ref_file.write('{}\t{}\t{:.3f}\t{}\n'.format(i, aa, sc, st))
+        ref_file.write('{}\t{}\t{}\t{}\n'.format(i, aa, '{:.3f}'.format(sc) if isinstance(sc, float) else '', st))
 
 
-def js_divergence(freqs, bg_distr):
-    """ Return the Jensen-Shannon Divergence for the column with the background
-    distribution bg_distr. sim_matrix is ignored. JSD is the default method."""
-
-    assert len(freqs) == len(bg_distr), 'len of freqs and background are different'
-    freqs[freqs == 0] = PSEUDOCOUNT
-    fc = freqs / freqs.sum()
-    r = (fc * 0.5) + (bg_distr * 0.5)
-    distance = (fc * np.log2(fc / r) + bg_distr * np.log2(bg_distr / r)).sum() / 2
-
-    return distance
-
-
-def conservation_based_prediction(loaded_ref, outbase, background_freqs):
-    logging.info('building baseline distance from blosum62 frequencies')
-    fname = '{}_cons.txt'.format(outbase)
+def naif_prediction(loaded_ref, outbase):
+    logging.info('building naif baseline from reverse input reference')
+    fname = '{}.txt'.format(outbase)
 
     with open(fname, 'w') as fhandle:
         for acc, data in loaded_ref.items():
-            scores = list()
-            with open(os.path.join(pssm_dir, '{}.fasta'.format(acc))) as asn:
-                prior_freqs = None
-                for line in asn:
-                    line = line.strip().split()
-                    ll = len(line)
+            states = [0 if r == 0 else 1 for r in data['states']]
+            scores = get_scores_movingwindow(states)
 
-                    if ll == 40:
-                        columns = line[:20]
-                        prior_freqs = np.array([background_freqs[aa] for aa in columns])
-
-                    if ll == 44:
-                        assert prior_freqs is not None, 'Prior not defined, check pssm file format'
-
-                        res_pos, res, *body, inf, wgh = line
-                        freqs = np.fromiter(map(lambda e: float(e) / 100, body[20:]), dtype=float)
-                        js_div = js_divergence(freqs, prior_freqs)
-                        scores.append(1 - js_div)
-                states = [1 if js >= 0.4 else 0 for js in scores]
             save_prediction(fhandle, acc, data['seq'], scores, states)
+
     return fname
 
 
@@ -90,6 +86,7 @@ def parse_args(wd):
 
     parser.add_argument('reference',
                         help='reference file to which predictions are to be compared')
+    parser.add_argument('-p', "--pRef", default=None, help='reference from which to derive naif predictions, if not set, reference argument will be used')
 
     parser.add_argument('-r', '--replaceUndefined', choices=['0', '1'], default=None,
                         help='replace value for undefined positions (-) in reference. '
@@ -112,14 +109,22 @@ if __name__ == '__main__':
     args = parse_args(SCRIPT_DIR)
     conf = parse_config(args.conf)
     set_logger(args.log, args.logLevel)
-    pssm_dir = dict(conf.items('data_directories'))['pssm']
+    # pssm_dir = dict(conf.items('data_directories'))['pssm']
 
     ref = ReferencePool(os.path.abspath(args.reference),
                         undefined_replace_value=args.replaceUndefined)
 
-    output_basename = build_output_basename(args.reference,
-                                            args.replaceUndefined, args.outdir, ['a', 'b'])
+    if args.pRef is not None:
+        suffix = 'naive-{}'.format(os.path.basename(os.path.splitext(args.pRef)[0]).split('_')[-1])
+        pred = ReferencePool(os.path.abspath(args.pRef),
+                             undefined_replace_value=args.replaceUndefined)
+    else:
+        suffix = "naive-self"
+        pred = ref
 
-    pred_fname = conservation_based_prediction(ref, output_basename, blosum62_freqs)
-    bvaluation(ref_pool=args.reference, prediction=[pred_fname], outdir=args.outdir, suffix='cons',
+    output_basename = build_output_basename(args.reference, args.replaceUndefined,
+                                            args.outdir, ['a', 'b'], suffix=suffix)
+    pred_fname = naif_prediction(pred, output_basename)
+
+    bvaluation(ref_pool=args.reference, prediction=[pred_fname], outdir=args.outdir, suffix=suffix,
                replace_undefined=args.replaceUndefined, log=args.log, log_level=args.logLevel)

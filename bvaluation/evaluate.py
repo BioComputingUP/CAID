@@ -341,6 +341,7 @@ def bvaluation(reference: str, prediction: list, outdir: str, prefix: str = None
             colnames = pis.iloc[0][2:]
             pis = pis.iloc[1:].rename(columns=colnames)
             perinstance_table = perinstance_table.append(pis, sort=False)
+
     
         if roc_evaluation is not None:
             roc, prc = evaluation.get_curves_repr().split('\n')
@@ -386,7 +387,8 @@ def bvaluation(reference: str, prediction: list, outdir: str, prefix: str = None
 
     cons_eval.save_pred_stack(pstack, ptargt, '{}_predstack.csv'.format(output_basename))
     pd.DataFrame(cm).to_csv('{}_consensusCM.csv'.format(output_basename))
-    
+
+    perinstance_table = perinstance_table.set_index([0, 1]).astype(float)
     if not perinstance_table_roc.empty:
         perinstance_table_roc = perinstance_table_roc.set_index([0, 1]).astype(float)
     if not perinstance_table_fmax.empty:

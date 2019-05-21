@@ -34,6 +34,7 @@ def parse_args(wd):
     parser.add_argument('-c', '--conf', type=str,
                         default=os.path.join(wd, 'config.ini'),
                         help="path to an alternative configuration file.")
+    parser.add_argument('-o', '--outdir', default='.')
 
     parser.add_argument('-l', '--log', type=str, default=None, help='log file')
     parser.add_argument("-ll", "--logLevel", default="ERROR",
@@ -123,8 +124,10 @@ def save_eval(randomized_refs, outbasename):
     perinstance_table = pd.DataFrame()
 
     for i, evl in enumerate(randomized_refs):
-        scores = pd.concat([scores, pd.DataFrame(evl.get_scores(dstr=dict), index=[i])],
-                           axis=0, sort=False)
+        newscores = evl.get_scores_asdict()
+        newscores.update(dict(zip(('npred', 'nref'), (len(randomized_refs), len(randomized_refs)))))
+
+        scores = pd.concat([scores, pd.DataFrame(newscores, index=[i])], axis=0, sort=False)
 
         pis = pd.DataFrame(evl.get_perinstance_scores(insert=str(i)))
         colnames = pis.iloc[0][2:]
@@ -145,10 +148,11 @@ if __name__ == '__main__':
         undefined_replace_value=args.replaceUndefined).make_pure_reference()
 
     # outdir = dict(conf.items('data_directories'))['baseline']
-    outdir = '.'
     # out_basename = 'len-negs_' if args.strictNegatives is False else 'str-negs_'
     # out_basename += os.path.splitext(os.path.basename(args.reference))[0].replace('_', '-')
     # out_basename = os.path.join(outdir, out_basename)
 
-    out_basename = build_output_basename(args.reference, args.replaceUndefined, outdir, ['a', 'b'])
+    out_basename = build_output_basename(args.reference, args.replaceUndefined,
+                                         args.outdir, ['a', 'b'])
+
     shuffle_reference(ref, out_basename)
