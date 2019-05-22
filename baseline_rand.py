@@ -152,7 +152,6 @@ if __name__ == '__main__':
     # out_basename += os.path.splitext(os.path.basename(args.reference))[0].replace('_', '-')
     # out_basename = os.path.join(outdir, out_basename)
 
-    out_basename = build_output_basename(args.reference, args.replaceUndefined,
-                                         args.outdir, ['a', 'b'])
+    out_basename = build_output_basename(args.reference, args.outdir, ['b'])
 
     shuffle_reference(ref, out_basename)
