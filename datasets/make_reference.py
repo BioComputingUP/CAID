@@ -525,7 +525,6 @@ def write_fess_reference(proteins, outdir, label, ref_names):
                                                        ''.join(data[k]['state'])))
 
 def launch_iprscan(proteins):
-
     with NamedTemporaryFile(mode='w', delete=False) as f_fasta:
         for disprot_id in proteins:
             protein = proteins[disprot_id]
@@ -534,7 +533,7 @@ def launch_iprscan(proteins):
                                                 protein.get('sequence')))
 
     ipr = interproscan.InterProScanLauncher([f_fasta.name, '-o', '.'])
-    ipr.run(bindir='/home/marnec/usr/interproscan-5.19-58.0/')
+    ipr.run(bindir='/home/marnec/lib/interproscan-5.9-50.0')
 
     return ipr.outfile
 
@@ -642,6 +641,141 @@ def write_caid_references_gene3d(proteins, outdir, label, ref_names):
                                                        ''.join(data[k]['state'])))
     os.remove(ipr_annotation)
 
+
+def write_caid_references_gene3dreverse(proteins, outdir, label, ref_names):
+    data = {}
+
+    ipr_annotation = launch_iprscan(proteins)
+    ipr_regs = get_ipr_regions(ipr_annotation)
+
+    for k in ref_names:
+        data.setdefault(k, {})
+        data[k]['outf'] = open("{}/{}-{}.txt".format(outdir, label, k), 'w')
+
+    for disprot_id in proteins:
+        protein = proteins[disprot_id]
+
+        # Region information
+        regions_names = []
+        methods = []
+        for region in protein['regions']:
+            methods.append(region['method']['id'])
+            func_names = [f['name'] for f in region['functions']]
+            regions_names += func_names
+
+        for k in ref_names:
+            data[k]['state'] = ['1' for _ in range(len(protein.get('sequence')))]
+
+            # assign negatives from Gene3D
+            if protein['disprot_id'] in ipr_regs:
+                for r in ipr_regs[protein['disprot_id']]:
+                    data[k]['state'][r[0] - 1: r[1]] = ['0'] * (r[1] - r[0] + 1)
+
+            # Write to file
+            if '1' in data[k]['state']:
+                data[k]['outf'].write(
+                    ">{} {} {} {} {}\n{}\n{}\n".format(disprot_id, protein['uniprot_accession'],
+                                                       ','.join(methods),
+                                                       ','.join(regions_names), ",".join(
+                            ["{}-{}:{}".format(ele['start'], ele['end'], ele['ann']) for ele in
+                             protein.get("mobidb", []).get("pdb_missing_residues", [])]),
+                                                       protein['sequence'],
+                                                       ''.join(data[k]['state'])))
+    os.remove(ipr_annotation)
+
+
+def write_caid_references_simple_nopdb(proteins, outdir, label, ref_names):
+    data = {}
+    for k in ref_names:
+        data.setdefault(k, {})
+        data[k]['outf'] = open("{}/{}-{}.txt".format(outdir, label, k), 'w')
+
+    for disprot_id in proteins:
+        protein = proteins[disprot_id]
+
+        # Region information
+        regions_names = []
+        methods = []
+        for region in protein['regions']:
+            methods.append(region['method']['id'])
+            func_names = [f['name'] for f in region['functions']]
+            regions_names += func_names
+
+        for k in ref_names:
+            # key = k.split('_')[0]
+            data[k]['state'] = ['0' for _ in range(len(protein.get('sequence')))]
+
+            # Assign pdb residues
+            for ele in protein.get("mobidb", []).get("pdb_missing_residues", []):
+                if ele['ann'] == 'S':
+                    for i in range(ele['start'] - 1, ele['end']):
+                        data[k]['state'][i] = '-'
+
+            # Assign positive labels (overwrite structure)
+            for region in protein['regions']:
+                # method = region['method']['id']
+                # func_names = [f['name'] for f in region['functions']]
+
+                for i in range(int(region['start']) - 1, int(region['end'])):
+                    data[k]['state'][i] = '1'
+
+            # Write to file
+            if '1' in data[k]['state']:
+                data[k]['outf'].write(
+                    ">{} {} {} {} {}\n{}\n{}\n".format(disprot_id, protein['uniprot_accession'],
+                                                       ','.join(methods), ','.join(regions_names),
+                                                       ",".join(
+                                                           ["{}-{}:{}".format(ele['start'],
+                                                                              ele['end'],
+                                                                              ele['ann']) for ele in
+                                                            protein.get("mobidb", []).get(
+                                                                "pdb_missing_residues", [])]),
+                                                       protein['sequence'],
+                                                       ''.join(data[k]['state'])))
+
+
+def write_caid_references_pdbreverse(proteins, outdir, label, ref_names):
+    data = {}
+    for k in ref_names:
+        data.setdefault(k, {})
+        data[k]['outf'] = open("{}/{}-{}.txt".format(outdir, label, k), 'w')
+
+    for disprot_id in proteins:
+        protein = proteins[disprot_id]
+
+        # Region information
+        regions_names = []
+        methods = []
+        for region in protein['regions']:
+            methods.append(region['method']['id'])
+            func_names = [f['name'] for f in region['functions']]
+            regions_names += func_names
+
+        for k in ref_names:
+            # initialize all positives
+            data[k]['state'] = ['1' for _ in range(len(protein.get('sequence')))]
+
+            # assign negatives from pdb
+            for ele in protein.get("mobidb", []).get("pdb_missing_residues", []):
+                if ele['ann'] == 'S':
+                    for i in range(ele['start'] - 1, ele['end']):
+                        data[k]['state'][i] = '0'
+
+            # Write to file
+            if '1' in data[k]['state']:
+                data[k]['outf'].write(
+                    ">{} {} {} {} {}\n{}\n{}\n".format(disprot_id, protein['uniprot_accession'],
+                                                       ','.join(methods), ','.join(regions_names),
+                                                       ",".join(
+                                                           ["{}-{}:{}".format(ele['start'],
+                                                                              ele['end'],
+                                                                              ele['ann']) for ele in
+                                                            protein.get("mobidb", []).get(
+                                                                "pdb_missing_residues", [])]),
+                                                       protein['sequence'],
+                                                       ''.join(data[k]['state'])))
+
+
 ########################################################################################################################
 # UniRef statistic
 # egrep -o "UniRef90_[A-Z,0-9]*\b" | sort | uniq -c | sort -n
@@ -650,7 +784,7 @@ def write_caid_references_gene3d(proteins, outdir, label, ref_names):
 # prot = parse_entries("../data/curated_entries/entries_curators_disprot8.json")
 
 # Entries fixed by Andras
-prot = parse_entries("../data/entries_curators_20181122.json")
+prot = parse_entries("/home/marnec/Projects/CAID/caid/data/entries_curators_20181122.json")
 logging.info("parsed entries %i", len(prot))
 
 good_prot = filter_bad_entries(prot)
@@ -690,20 +824,26 @@ reference_names = ['disprot-all',
 
 reference_names_pdb = list(map(lambda s: s + '_pdb', reference_names))
 reference_names_gene3d = list(map(lambda s: s + '_gene3d', reference_names))
+reference_names_gene3d_reverse = list(map(lambda s: s + '_gene3d', reference_names))
 reference_names_simple = list(map(lambda s: s + '_simple', reference_names))
+reference_names_counted = list(map(lambda s: s + '_evidence-num', reference_names))
 
-write_caid_references_simple(new_prot, '../data/disorder', 'new', reference_names_simple)
-write_caid_references_simple(old_prot, '../data/disorder', 'old', reference_names_simple)
-write_caid_references_pdb(new_prot, '../data/disorder', 'new', reference_names_pdb)
-write_caid_references_pdb(old_prot, '../data/disorder', 'old', reference_names_pdb)
-write_caid_references_gene3d(new_prot, '../data/disorder', 'new', reference_names_gene3d)
-write_caid_references_gene3d(old_prot, '../data/disorder', 'old', reference_names_gene3d)
+# write_caid_references_simple(new_prot, '../data/disorder', 'new', reference_names_simple)
+# write_caid_references_simple(old_prot, '../data/disorder', 'old', reference_names_simple)
+# write_caid_references_pdb(new_prot, '../data/disorder', 'new', reference_names_pdb)
+# write_caid_references_pdb(old_prot, '../data/disorder', 'old', reference_names_pdb)
+# write_caid_references_gene3d(new_prot, '../data/disorder', 'new', reference_names_gene3d)
+# write_caid_references_gene3d(old_prot, '../data/disorder', 'old', reference_names_gene3d)
 
+write_caid_references_gene3dreverse(new_prot, '../data/disorder', 'new', ['gene3d-r'])
+write_caid_references_pdbreverse(new_prot, '/home/marnec/Projects/CAID/caid/data/disorder', 'new', ['disprot-all_pdb-r'])
+# write_caid_references_simple_nopdb(new_prot, '/home/marnec/Projects/CAID/data/disorder', 'new', ['disprot-all_simple-nopdb'])
+# write_caid_references_simpleevidencenum(new_prot, '/home/marnec/Projects/CAID/data/disorder', 'new', ['disprot-all_simple-evidence-num'])
 
 # write_fess_reference(new_prot, '../data/disorder', 'new', ['fess'])
 
 
-caid_reference_stats('../data/reference', 'new', reference_names)
+# caid_reference_stats('../data/reference', 'new', reference_names)
 # caid_reference_stats('../data/reference', 'old', reference_names)
 
 
