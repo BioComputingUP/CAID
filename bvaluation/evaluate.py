@@ -377,6 +377,7 @@ def bvaluation(reference: str, prediction: list, outdir: str, prefix: str = None
             perinstance_table_fmax = perinstance_table_fmax.append(pis_fmax, sort=False)
     
         df = pd.DataFrame(predobj.zip()).transpose()
+        
         df = df.rename(columns=df.iloc[0]).iloc[1:].rename(index={1:predname})
         pred_stack = pred_stack.append(df, sort=False)
 
@@ -405,12 +406,12 @@ def bvaluation(reference: str, prediction: list, outdir: str, prefix: str = None
         with open('{}_rocPoints.txt'.format(output_basename), 'w') as f:
             f.write('\n'.join(roc_points))
             perinstance_table_roc.to_csv('{}_perInstanceRedefScoresROC.csv'.format(output_basename),
-                                   float_format='%.3f')
+                                         float_format='%.3f')
     if prc_points:
         with open('{}_prcPoints.txt'.format(output_basename), 'w') as f:
             f.write('\n'.join(prc_points))
             perinstance_table_fmax.to_csv('{}_perInstanceRedefScoresFmax.csv'.format(output_basename),
-                                         float_format='%.3f')
+                                          float_format='%.3f')
 
 
 if __name__ == '__main__':

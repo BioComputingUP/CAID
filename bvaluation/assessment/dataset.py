@@ -117,12 +117,21 @@ class PredictionEntry(ImmutableDict):
         if p:
             dict.__setitem__(self, 'positions', np.array(p, dtype=np.int))
             self.validity_keys.append('positions')
+        else:
+            pass
         if sc and sc[0]:
             dict.__setitem__(self, 'scores', np.array(sc, dtype=np.float))
             self.validity_keys.append('scores')
+        else:
+            pass
         if st and st[0]:
             dict.__setitem__(self, 'states', np.array(st, dtype=np.float))
             self.validity_keys.append('states')
+        else:
+            dict.__setitem__(self, 'states', np.greater_equal(self['scores'], 0.5).astype(np.float))
+            self.validity_keys.append('states')
+
+
 
     def _check_consistency(self):
         lengths = set()

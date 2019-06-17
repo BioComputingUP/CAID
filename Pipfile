@@ -11,6 +11,9 @@ sklearn = "*"
 matplotlib = "*"
 seaborn = "*"
 pandas = "*"
+jupyter-contrib-nbextensions = "*"
+yapf = "*"
+ipywidgets = "*"
 
 [requires]
 python_version = "3.6"
