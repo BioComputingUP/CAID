@@ -533,7 +533,7 @@ def launch_iprscan(proteins):
                                                 protein.get('sequence')))
 
     ipr = interproscan.InterProScanLauncher([f_fasta.name, '-o', '.'])
-    ipr.run(bindir='/home/marnec/lib/interproscan-5.9-50.0')
+    ipr.run(bindir='/home/marnec/lib/interproscan-5.19-58.0')
 
     return ipr.outfile
 
