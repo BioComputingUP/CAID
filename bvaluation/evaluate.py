@@ -192,8 +192,7 @@ def build_output_basename(reference: str, outdir: str,
     return basename
 
 
-def evaluate(reference_dataset,
-             pred_file: str, lbl: str, opt_thr='roc'):
+def evaluate(reference_dataset, pred_file: str, lbl: str, opt_thr='roc'):
     """
     Evaluate predictions coming from a single file against the reference
 
