@@ -835,8 +835,8 @@ reference_names_counted = list(map(lambda s: s + '_evidence-num', reference_name
 # write_caid_references_gene3d(new_prot, '../data/disorder', 'new', reference_names_gene3d)
 # write_caid_references_gene3d(old_prot, '../data/disorder', 'old', reference_names_gene3d)
 
-write_caid_references_gene3dreverse(new_prot, '../data/disorder', 'new', ['gene3d-r'])
-write_caid_references_pdbreverse(new_prot, '/home/marnec/Projects/CAID/caid/data/disorder', 'new', ['disprot-all_pdb-r'])
+write_caid_references_gene3dreverse(new_prot, '../data/disorder', 'new', ['gene3d-r_simple'])
+write_caid_references_pdbreverse(new_prot, '/home/marnec/Projects/CAID/caid/data/disorder', 'new', ['pdb-r_simple'])
 # write_caid_references_simple_nopdb(new_prot, '/home/marnec/Projects/CAID/data/disorder', 'new', ['disprot-all_simple-nopdb'])
 # write_caid_references_simpleevidencenum(new_prot, '/home/marnec/Projects/CAID/data/disorder', 'new', ['disprot-all_simple-evidence-num'])
 

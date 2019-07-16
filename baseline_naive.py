@@ -54,13 +54,17 @@ def save_prediction(ref_file, acc, seq, scores, states):
         ref_file.write('{}\t{}\t{}\t{}\n'.format(i, aa, '{:.3f}'.format(sc) if isinstance(sc, float) else '', st))
 
 
-def naif_prediction(loaded_ref, outbase):
+def naif_prediction(loaded_ref, outbase, invert):
     logging.info('building naif baseline from reverse input reference')
     fname = '{}.txt'.format(outbase)
 
+
     with open(fname, 'w') as fhandle:
         for acc, data in loaded_ref.items():
-            states = [0 if r == 0 else 1 for r in data['states']]
+            if invert is True:
+                states = [1 if r == 0 else 0 for r in data['states']]
+            else:
+                states = [0 if r == 0 else 1 for r in data['states']]
             scores = get_scores_movingwindow(states)
 
             save_prediction(fhandle, acc, data['seq'], scores, states)
@@ -91,6 +95,7 @@ def parse_args(wd):
     parser.add_argument('-r', '--replaceUndefined', choices=['0', '1'], default=None,
                         help='replace value for undefined positions (-) in reference. '
                              'By default not applied')
+    parser.add_argument('-i', '--invert', default=False, action='store_true')
     parser.add_argument('-o', '--outdir', default='.')
     parser.add_argument('-c', '--conf', type=str,
                         default=os.path.join(wd, 'config.ini'),
@@ -109,13 +114,12 @@ if __name__ == '__main__':
     args = parse_args(SCRIPT_DIR)
     conf = parse_config(args.conf)
     set_logger(args.log, args.logLevel)
-    # pssm_dir = dict(conf.items('data_directories'))['pssm']
 
     ref = ReferencePool(os.path.abspath(args.reference),
                         undefined_replace_value=args.replaceUndefined)
 
     if args.pRef is not None:
-        suffix = 'naive-{}'.format(os.path.basename(os.path.splitext(args.pRef)[0]).split('_')[-1])
+        suffix = 'naive-{}'.format(os.path.basename(os.path.splitext(args.pRef)[0]))
         pred = ReferencePool(os.path.abspath(args.pRef),
                              undefined_replace_value=args.replaceUndefined)
     else:
@@ -123,7 +127,7 @@ if __name__ == '__main__':
         pred = ref
 
     output_basename = build_output_basename(args.reference, args.outdir, ['b'], suffix=suffix)
-    pred_fname = naif_prediction(pred, output_basename)
+    pred_fname = naif_prediction(pred, output_basename, args.invert)
 
     bvaluation(reference=args.reference, prediction=[pred_fname], outdir=args.outdir, suffix=suffix,
                replace_undefined=args.replaceUndefined, log=args.log, log_level=args.logLevel)

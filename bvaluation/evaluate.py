@@ -358,10 +358,12 @@ def bvaluation(reference: str, prediction: list, outdir: str, prefix: str = None
             pis_roc = pis_roc.iloc[1:].rename(columns=colnames_r)
             perinstance_table_roc = perinstance_table_roc.append(pis_roc, sort=False)
 
+
+
         if fmax_evaluation is not None:
-            roc, prc = evaluation.get_curves_repr().split('\n')
-            roc_points.append('{} {}'.format(label, roc))
-            prc_points.append('{} {}'.format(label, prc))
+            # roc, prc = evaluation.get_curves_repr().split('\n')
+            # roc_points.append('{} {}'.format(label, roc))
+            # prc_points.append('{} {}'.format(label, prc))
 
             fmax_evaluation.curves = evaluation.curves
             restabl_fmax = fmax_evaluation.get_scores_asdict()
@@ -374,7 +376,8 @@ def bvaluation(reference: str, prediction: list, outdir: str, prefix: str = None
             colnames_r = pis_fmax.iloc[0][2:]
             pis_fmax = pis_fmax.iloc[1:].rename(columns=colnames_r)
             perinstance_table_fmax = perinstance_table_fmax.append(pis_fmax, sort=False)
-    
+
+
         df = pd.DataFrame(predobj.zip()).transpose()
         
         df = df.rename(columns=df.iloc[0]).iloc[1:].rename(index={1:predname})
