@@ -1,4 +1,5 @@
 import logging
+import copy
 import numpy as np
 from sklearn import metrics
 from collections import OrderedDict
@@ -20,6 +21,62 @@ class EvaluationArray(object):
                             type(eval_obj))
 
 
+class ConsensusEvaluation(object):
+    def __init__(self):
+        self.confusion_matrices = list()
+
+    def zip_predstack_ref(self, reference, prediction_stack):
+        prediction_stack = prediction_stack.dropna(1)
+        merged_reference = list()
+        pstack = prediction_stack.apply(np.concatenate, axis=1)
+        ptargt = prediction_stack.apply(lambda s: s.apply(len), axis=0).mean(axis=0)
+
+        for c in prediction_stack.columns:
+            r = reference[c]['states']
+            nan_indexes = np.isnan(r)
+            r = r[~nan_indexes]
+            merged_reference.extend(r.tolist())
+
+        return pstack, ptargt, merged_reference
+
+    def apply_all_consensus_thresholds(self, pstack):
+        npreds = len(pstack)
+        consensus = pstack.mean()
+
+        for i in range(0, npreds + 1):
+            mp = np.greater_equal(consensus, i / npreds).astype(int)
+            yield mp
+
+    def get_consensus_confmat(self, pstack, ref):
+        for cons in self.apply_all_consensus_thresholds(pstack):
+            m = metrics.confusion_matrix(ref, cons, labels=(0, 1))
+            self.confusion_matrices.append(dict(zip(['tn', 'fp', 'fn', 'tp'], m.ravel())))
+        return self.confusion_matrices
+
+    def save_pred_stack(self, pstack, ptargt, fname):
+        with open(fname, 'w') as o:
+            # write header
+            prevlen = 0
+            maxmethodlen = len(max(pstack.index, key=len))
+
+            for tgt, currentlen in ptargt.items():
+                currentlen = currentlen + prevlen
+                o.write("#{},{},{}".format(tgt, int(prevlen), int(currentlen)))
+                prevlen = currentlen
+
+            # write predictions
+            for method, pred in pstack.items():
+                o.write("\n{:<{p}} {}".format(method,
+                                              ''.join(pred.astype(int).astype(str)),
+                                              p=maxmethodlen))
+            # write consensus
+            n = len(pstack)
+            for method, pred in enumerate(self.apply_all_consensus_thresholds(pstack)):
+                o.write("\n{:<{p}} {}".format("{}/{}".format(method, n),
+                                              ''.join(pred.astype(int).astype(str)),
+                                              p=maxmethodlen))
+
+
 class Evaluation(object):
     """
     Evaluation of a prediction against a reference
@@ -34,7 +91,11 @@ class Evaluation(object):
         if len(reference) == len(prediction):
             confusion_matrix = metrics.confusion_matrix(reference, prediction,
                                                     labels=(0, 1)).astype(np.float)
-            self.overall_scores.states_based_metrics(confusion_matrix=confusion_matrix)
+            self.overall_scores.states_based_metrics(
+                # confusion_matrix=confusion_matrix,
+                ytrue=reference,
+                ypred=prediction
+            )
 
     def calc_curves(self, reference, scores):
         self.curves.calc_curves(reference, scores)
@@ -42,6 +103,7 @@ class Evaluation(object):
     def calc_average_instance_scores(self, reference, prediction, save_perinstance_scores=True,
                                      accessions=None):
         score_array = self.avg_instance_scores.from_iterable(reference, prediction)
+
 
         if save_perinstance_scores is True:
             if accessions:
@@ -58,10 +120,11 @@ class Evaluation(object):
             lbls.extend(labels)
             vals.extend(scores)
 
-        if self.avg_instance_scores._is_calculated is True:
-            _, labels, *scores = zip(*self.avg_instance_scores.get_members())
-            lbls.extend(sum((('{}_avg'.format(l), '{}_std'.format(l)) for l in labels), ()))
-            vals.extend(sum(scores, ()))
+        # if self.avg_instance_scores._is_calculated is True:
+        #     _, labels, *scores = zip(*self.avg_instance_scores.get_members())
+        #     print(labels, scores)
+        #     lbls.extend(sum((('{}_avg'.format(l), '{}_std'.format(l)) for l in labels), ()))
+        #     vals.extend(sum(scores, ()))
 
         if self.curves._is_calculated is True:
             _, labels, scores, *_ = zip(*self.curves.get_members())

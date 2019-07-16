@@ -1,4 +1,5 @@
 import logging
+import copy
 import numpy as np
 from itertools import groupby, chain
 
@@ -51,7 +52,7 @@ class ReferencePool(ImmutableDict):
                     seq, states = map(str.strip, next(faiter))
 
                     nastates = np.fromiter(map(self.pattern.get, states), dtype=float)
-                    ref_entry = ReferenceEntry(desc, nastates)
+                    ref_entry = ReferenceEntry(desc, nastates, seq)
                     dict.__setitem__(self, acc, ref_entry)
         logging.debug('ref pool: %s', self)
 
@@ -83,13 +84,14 @@ class ReferenceEntry(ImmutableDict):
     :param accession: reference entry accession
     :param nastates: states
     """
-    def __init__(self, accession: str, nastates: np.array):
+    def __init__(self, accession: str, nastates: np.array, seq: str):
         dict.__init__(self)
-        self._build_entry(accession, nastates)
+        self._build_entry(accession, nastates, seq)
 
-    def _build_entry(self, acc: str, s: np.array):
+    def _build_entry(self, acc: str, s: np.array, seq: str):
         dict.__setitem__(self, 'acc', acc)
         dict.__setitem__(self, 'states', s)
+        dict.__setitem__(self, 'seq', seq)
 
 
 class PredictionEntry(ImmutableDict):
@@ -115,12 +117,21 @@ class PredictionEntry(ImmutableDict):
         if p:
             dict.__setitem__(self, 'positions', np.array(p, dtype=np.int))
             self.validity_keys.append('positions')
+        else:
+            pass
         if sc and sc[0]:
             dict.__setitem__(self, 'scores', np.array(sc, dtype=np.float))
             self.validity_keys.append('scores')
+        else:
+            pass
         if st and st[0]:
             dict.__setitem__(self, 'states', np.array(st, dtype=np.float))
             self.validity_keys.append('states')
+        else:
+            dict.__setitem__(self, 'states', np.greater_equal(self['scores'], 0.5).astype(np.float))
+            self.validity_keys.append('states')
+
+
 
     def _check_consistency(self):
         lengths = set()
@@ -181,7 +192,7 @@ class Prediction(object):
         self.accessions_set.add(acc)
 
     def set_coverage(self, ref_accs):
-        self.coverage = len(ref_accs & self.accessions_set) / len(ref_accs)
+        self.coverage = (len(ref_accs & self.accessions_set), len(ref_accs))
 
     def set_merged_states(self):
         self.mstates = np.fromiter(chain(*self.states), dtype=np.float)
@@ -192,3 +203,10 @@ class Prediction(object):
     def apply_cutoff(self, cutoff):
         self.states = [np.greater_equal(s, cutoff).astype(int) for s in self.scores]
         self.mstates = np.fromiter(chain(*self.states), dtype=np.float)
+
+    def zip(self):
+        return zip(self.accessions, self.states)
+
+
+    def copy(self):
+        return copy.deepcopy(self)

@@ -94,6 +94,7 @@ def parse_args(wd):
     parser.add_argument('-r', '--replaceUndefined', choices=['0', '1'], default=None,
                         help='replace value for undefined positions (-) in reference. '
                              'By default not applied')
+    parser.add_argument('-o', '--outdir', default='.')
     parser.add_argument('-c', '--conf', type=str,
                         default=os.path.join(wd, 'config.ini'),
                         help="path to an alternative configuration file.")
@@ -112,20 +113,13 @@ if __name__ == '__main__':
     conf = parse_config(args.conf)
     set_logger(args.log, args.logLevel)
     pssm_dir = dict(conf.items('data_directories'))['pssm']
-    # outdir = dict(conf.items('data_directories'))['baseline']
-    outdir = ''
+
     ref = ReferencePool(os.path.abspath(args.reference),
                         undefined_replace_value=args.replaceUndefined)
 
     output_basename = build_output_basename(args.reference,
-                                            args.replaceUndefined, outdir, ['a', 'b'])
-
-    # negs = 'len-negs' if args.strictNegatives is False else 'str-negs'
-    # output_basename = os.path.join(outdir, '{}_{}_{}'.format(
-    #     negs,
-    #     os.path.splitext(os.path.basename(args.reference))[0].replace('_', '-'),
-    #     code
-    # ))
+                                            args.outdir, ['b'])
 
     pred_fname = conservation_based_prediction(ref, output_basename, blosum62_freqs)
-    bvaluation(parse_eval_args(build_args(args, [pred_fname], outdir)))
+    bvaluation(reference=args.reference, prediction=[pred_fname], outdir=args.outdir, suffix='cons',
+               replace_undefined=args.replaceUndefined, log=args.log, log_level=args.logLevel)

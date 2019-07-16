@@ -1,3 +1,4 @@
+import copy
 import numpy as np
 from sklearn import metrics
 # relative imports
@@ -60,6 +61,7 @@ class ROC(Curve):
     def calc_points(self, ytrue, yscore):
         if yscore.size != 0:
             self.x, self.y, self.thresholds = metrics.roc_curve(ytrue, yscore, pos_label=1)
+
             self.cutoff_youdens_j()
             self.auc_from_points()
         else:
@@ -78,16 +80,36 @@ class PrecisionRecallCurve(Curve):
     """
     def __init__(self, name=None, label=None):
         super(PrecisionRecallCurve, self).__init__(name, label)
+        self.fmax = None
 
     def calc_points(self, ytrue, yscore):
         if yscore.size != 0:
             self.y, self.x, self.thresholds = metrics.precision_recall_curve(ytrue,
                                                                              yscore,
                                                                              pos_label=1)
+
+            # print(np.array(list((zip(self.x, self.y, self.thresholds, 2*(self.x*self.y)/(self.x+self.y))))))
             self.cutoff_youdens_j()
+            self.cutoff_fmax()
             self.auc_from_points()
         else:
             self.x = np.array([])
             self.y = np.array([])
             self.thresholds = np.array([])
             self.auc.amount = np.nan
+
+    def cutoff_fmax(self):
+        if self.x.size != 0 and self.x.size != 0 and self.thresholds.size != 0:
+            f_scores = 2 * ((self.y * self.x)/(self.y + self.x))
+            nonnan_mask = np.where(~np.isnan(f_scores))
+            f_scores = f_scores[nonnan_mask]
+            thr = copy.copy(self.thresholds)[nonnan_mask[:-1]]
+
+            f_ordered = sorted(zip(f_scores, thr))
+
+            # print(f_ordered[-10:])
+            # print('f', f_scores[:10])
+            # print('t', self.thresholds[:10])
+            # print('p', self.y[:10])
+            # print('r', self.x[:10])
+            self.fmax = f_ordered[-1][1]
