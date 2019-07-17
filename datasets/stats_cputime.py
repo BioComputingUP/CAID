@@ -56,6 +56,9 @@ for method in sorted(methods_list, key=lambda k: k['name']):
     else:
         print("Missing file {}".format(method['dir']))
 
+    if method['dir'] == "disopred3-binding":
+        outfile = "../data/qsub/out/{}".format(method['dir'].split("-")[0])  # its disopred3 and not disopred3-binding
+
     if outfile is not None:
         targets = {}
         with open(outfile) as f:
@@ -85,7 +88,11 @@ for i, method in enumerate(time_methods_labels):
     #     time_colors[i] = 'blue'
 
     if 'evolution' in method:
-        time_colors[i] = 'red'
+        # time_colors[i] = 'red'
+        pass
+
+    if method["dir"] == "mobidblite":
+        time_colors[i] = 'blue'
 
     # Add Psiblast time
     if "input" in method and "pssm" in method["input"]:
@@ -96,15 +103,64 @@ for i, method in enumerate(time_methods_labels):
         time_methods[i] += time_hhblits_mean
 
 
-fig, ax = plt.subplots()
-bplot = ax.boxplot(time_methods, labels=["{}{}".format(method['name'], '*' if method["dir"] == "mobidblite" else '') for method in time_methods_labels], sym="", patch_artist=True)
-# ax.set_ylim(0, 4000)
-ax.set_ylabel("Seconds")
-ax.set_yscale("log")
-plt.xticks(rotation=90)
+# Split disorder/binding
+time_methods_d = []
+time_methods_labels_d = []
+time_colors_d = []
 
-for patch, color in zip(bplot['boxes'], time_colors):
+time_methods_b = []
+time_methods_labels_b = []
+time_colors_b = []
+
+
+for i, method in enumerate(time_methods_labels):
+    if method['id'][0] == "D":
+        time_methods_labels_d.append(method)
+        time_methods_d.append(time_methods[i])
+        time_colors_d.append(time_colors[i])
+    else:
+        time_methods_labels_b.append(method)
+        time_methods_b.append(time_methods[i])
+        time_colors_b.append(time_colors[i])
+
+
+# Disorder figure
+fig, ax = plt.subplots(figsize=(5, 7))
+
+# bplot = ax.boxplot(time_methods, labels=["{}{}".format(method['name'], '*' if method["dir"] == "mobidblite" else '') for method in time_methods_labels], sym="", patch_artist=True, vert=False)
+bplot = ax.boxplot(time_methods_d, labels=["{}{}".format('*' if "evolution" in method else '', method['name']) for method in time_methods_labels_d], sym="", patch_artist=True, vert=False)
+
+# ax.set_ylim(0, 4000)
+ax.set_xlabel("Seconds per target")
+ax.set_xscale("log")
+# plt.xticks(rotation=90)
+
+for patch, color in zip(bplot['boxes'], time_colors_d):
     patch.set_facecolor(color)
 
 plt.tight_layout()
-plt.savefig('cputime.png'.format(), dpi=300)
+plt.savefig('../data/cputime_disorder.png'.format(), dpi=300)
+
+
+# Binding figure
+fig, ax = plt.subplots(figsize=(5, 7))
+
+# bplot = ax.boxplot(time_methods, labels=["{}{}".format(method['name'], '*' if method["dir"] == "mobidblite" else '') for method in time_methods_labels], sym="", patch_artist=True, vert=False)
+bplot = ax.boxplot(time_methods_b, labels=["{}{}".format('*' if "evolution" in method else '', method['name']) for method in time_methods_labels_b], sym="", patch_artist=True, vert=False)
+
+# ax.set_ylim(0, 4000)
+ax.set_xlabel("Seconds per target")
+ax.set_xscale("log")
+# plt.xticks(rotation=90)
+
+for patch, color in zip(bplot['boxes'], time_colors_b):
+    patch.set_facecolor(color)
+
+plt.tight_layout()
+plt.savefig('../data/cputime_binding.png'.format(), dpi=300)
+
+
+# TODO create a TSV with time data
+
+
+
