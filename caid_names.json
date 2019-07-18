@@ -29,4 +29,16 @@
 "D010_DisPredict-2": "*DisPredict-2",
 "D009_GlobPlot": "GlobPlot",
 "D033_DynaMine": "DynaMine",
-"D032_DFLpred": "DFLpred"}
+"D032_DFLpred": "DFLpred",
+"B012_OPAL": "*OPAL",
+"B002_ANCHOR-2": "ANCHOR-2",
+"B001_ANCHOR": "ANCHOR",
+"B005_MoRFchibi-web": "*MoRFchibi-web",
+"B004_MoRFchibi-light": "MoRFchibi-light",
+"B010_DisoRDPbind-protein": "DisoRDPbind-protein",
+"B013_DISOPRED-3.1-binding": "*DISOPRED-3.1-binding",
+"B011_fMoRFpred": "fMoRFpred",
+"B009_DisoRDPbind-DNA": "DisoRDPbind-DNA",
+"B008_DisoRDPbind-RNA": "DisoRDPbind-RNA",
+"B007_DisoRDPbind": "DisoRDPbind"
+}
