@@ -1,5 +1,94 @@
 import os
 from itertools import groupby
+import logging.config
+import json
+import traceback
+
+
+def _state2regions(state):
+    """
+    Transform disorder/order string into a list of disorder regions (start/end)
+    """
+    regions = []
+    start = 0
+    end = 0
+    for i in range(len(state) - 1):
+        if state[i] != state[i + 1]:
+            if state[i] == "1":
+                regions.append((start, end))
+            start = i + 1
+        end += 1
+    # Check on last char
+    if state[i] == "1":
+        regions.append((start, end))
+    return regions
+
+
+def _filter_regions(regions, len_cutoff=3):
+    filtered_regions = []
+    for start, end in regions:
+        if (end - start + 1) >= len_cutoff:
+            filtered_regions.append((start, end))
+    return filtered_regions
+
+
+def _regions2state(regions, state_len):
+    state = ['0' for i in range(state_len)]
+    for start, end in regions:
+        for i in range(start, end + 1):
+            # print i
+            state[i] = '1'
+    return ''.join(state)
+
+
+def _regions2state_mdbl(regions, state_len):
+    state = ['0' for i in range(state_len)]
+    for start, end, status in regions:
+        for i in range(start, end + 1):
+            # print i
+            state[i-1] = '1'
+    return ''.join(state)
+
+
+# Parse reference sequences
+def parse_reference_sequences(fastafile, filter_targets=None):
+
+    targets = []
+    with open(filter_targets) as f:
+        for line in f:
+            targets.append(line.strip())
+    targets = frozenset(targets)
+
+    r_seqs = {}
+    with open(fastafile) as f:
+        for line in f:
+            if line[0] == '>':
+                name = line.rstrip().split()[0][1:]
+                r_seqs.setdefault(name, '')
+            else:
+                r_seqs[name] += line.strip()
+
+    new_r_seqs = {}
+    if filter_targets:
+        for name in r_seqs:
+            if name in targets:
+                new_r_seqs[name] = r_seqs[name]
+    else:
+        new_r_seqs = r_seqs
+
+    return new_r_seqs
+
+
+def strip_split(string, expected=None):
+    if string:
+        s = string.strip('\n').rsplit('\t')
+        if expected and len(s) != expected:
+            # logging.error('expecting %i elements from split, got %i', expected, len(s))
+            raise ValueError('expecting %i elements from split, got %i', expected, len(s))
+        return s
+
+
+###########################################################
 
 
 def parse_vertical_format(inputfile, kwargs):
@@ -27,20 +116,6 @@ def parse_predisorder(inputfile, kwargs):
         seq = next(f).strip()
         state = ''.join(['1' if status == 'D' else '0' for status in next(f).strip()])
         scores = next(f).split()
-    return seq, state, scores
-
-
-def parse_anchor(inputfile, kwargs):
-    seq = ''
-    state = ''
-    scores = []
-    with open(inputfile) as f:
-        for i, line in enumerate(f):
-            if line[0] != '#':
-                line=line.strip().split()
-                seq += line[1]
-                scores.append(line[2])
-                state += line[3]
     return seq, state, scores
 
 
@@ -78,14 +153,6 @@ def parse_isunstruct(inputfile, kwargs):
     return seq, state, scores
 
 
-# TODO check a second threshold can be applicable
-def parse_globplot(inputfile, kwargs):
-    with open(inputfile) as f:
-        scores = eval(next(f))[0]['p']
-    return None, ''.join(['1' if score >= 0.0 else '0' for score in scores]), scores
-
-
-# TODO check some proteins are parsed wrongly (score alone in the last line)
 def parse_dflpred(inputfile, kwargs):
     # Score threshold is 0.18 according to documenation
     with open(inputfile) as f:
@@ -128,7 +195,7 @@ def _parse_disordpbind(inputfile, kwargs):
         state_prot = next(f).split(':')[1].strip()
         scores_prot = next(f).split(':')[1].strip()[:-1].split(',')
 
-    state = ['1' if l.isupper() else '0' for l in seq]
+    state = ['1' if l.isupper() else '0' for l in seq]  # Disorder
     return seq.upper(), state, state_rna, scores_rna, state_dna, scores_dna, state_prot, scores_prot
 
 
@@ -142,66 +209,15 @@ def parse_fmorfpred(inputfile, kwargs):
     return seq.upper(), state, scores
 
 
-def parse_vsl2(inputfile, kwargs):
-    seq = ''
-    state = ''
-    scores = []
-    start = False
-    with open(inputfile) as f:
-        for i, line in enumerate(f):
-            if line.strip() == '========================================':
-                start = False
-            if start:
-                ele = line.strip().split()
-                seq += ele[1]
-                scores.append(ele[2].replace(',', '.'))
-                state += '1' if ele[3] == 'D' else '0'
-            if line.strip() == '----------------------------------------':
-                start = True
-    return seq, state, scores
-
-
-def parse_dis465(inputfile, kwargs):
-    scores_dis465, scores_disHL = _parse_disemble(inputfile, kwargs)
-    state = ['1' if score >= 0.5 else '0' for score in scores_dis465]
-    return None, ''.join(state), scores_dis465
-
-
-def parse_disHL(inputfile, kwargs):
-    rscores_dis465, scores_disHL = _parse_disemble(inputfile, kwargs)
-    state = ['1' if score >= 0.086 else '0' for score in scores_disHL]
-    return None, ''.join(state), scores_disHL
-
-
-def _parse_disemble(inputfile, kwargs):
-    with open(inputfile) as f:
-        ele = eval(next(f))
-    scores_dis465 = next(filter(lambda k: k['pred'] == 'dis465', ele))['p']
-    # before: scores_dis465 = filter(lambda k: k['pred'] == 'dis465', ele)[0]['p']
-    scores_disHL = next(filter(lambda k: k['pred'] == 'disHL', ele))['p']
-    # before: scores_disHL = filter(lambda k: k['pred'] == 'disHL', ele)[0]['p']
-    return scores_dis465, scores_disHL
-
-
 def parse_mobidblite(inputfile, kwargs):
     with open(inputfile) as f:
-        ele = eval(next(f))['predictions']
-    ele = filter(lambda k:k['method'] == 'mobidb_lite', ele)
-
-    if ele:
-        first_ele = next(ele)
-        state = ['0' for i in first_ele['scores']]
-        # changed from: state = ['0' for i in ele[0]['scores']]
-        for start, end, ann in first_ele['regions']:
-        # changed from: for start, end, ann in ele[0]['regions']:
-            if ann[0] == 'D':
-                for i in range(start - 1, end):
-                    state[i] = '1'
+        obj = json.loads(f.read())
+    pred = list(filter(lambda k: k['method'] == kwargs['method_name'], obj['predictions']))
+    if pred:
+        pred = pred[0]
+        return None, _regions2state_mdbl(pred['regions'], len(pred['scores'])), pred['scores']
     else:
-        state = None
-        first_ele = None
-    return None, ''.join(state) if state else None, first_ele['scores'] if first_ele else None
-    # changed from: return None, ''.join(state) if state else None, ele[0]['scores'] if ele else None
+        return None, None, None
 
 
 def parse_mcl(inputfile, kwargs):
@@ -221,93 +237,7 @@ def parse_mcw(inputfile, kwargs):
     return seq, state, scores
 
 
-def parse_jronn(inputfile, kwargs):
-    block = []
-    name = None
-    jronn_data = {}
-    with open(inputfile) as f:
-        for line in f:
-            if line.strip():
-                line = line.strip().split()
-                if line[0][0] == '>':
-                    if name:
-                        jronn_data[name] = _parse_jronn_block(block, kwargs)
-                    name = line[0][1:]
-                    block = []
-                else:
-                    block.append(line)
-
-    jronn_data[name] = _parse_jronn_block(block, kwargs)
-    return jronn_data
-
-
-def _parse_jronn_block(block, kwargs):
-    seq = ''
-    state = ''
-    scores = []
-    for l, score in block:
-        seq += l
-        scores.append(score.replace(',', '.'))
-        state += '1' if float(score.replace(',', '.')) >= kwargs.get('status_th') else '0'
-    return seq, state, scores
-
-
-def _state2regions(state):
-    """
-    Transform disorder/order string into a list of disorder regions (start/end)
-    """
-    regions = []
-    start = 0
-    end = 0
-    for i in range(len(state) - 1):
-        if state[i] != state[i + 1]:
-            if state[i] == "1":
-                regions.append((start, end))
-            start = i + 1
-        end += 1
-    # Check on last char
-    if state[i] == "1":
-        regions.append((start, end))
-    return regions
-
-
-def _filter_regions(regions, len_cutoff=3):
-    filtered_regions = []
-    for start, end in regions:
-        if (end - start + 1) >= len_cutoff:
-            filtered_regions.append((start, end))
-    return filtered_regions
-
-
-def _regions2state(regions, state_len):
-    state = ['0' for i in range(state_len)]
-    for start, end in regions:
-        for i in range(start, end + 1):
-            # print i
-            state[i] = '1'
-    return ''.join(state)
-
-
-# Parse reference sequences
-def parse_reference_sequences(fastafile):
-    r_seqs = {}
-    with open(fastafile) as f:
-        for line in f:
-            if line[0] == '>':
-                name = line.rstrip().split()[0][1:]
-                r_seqs.setdefault(name, '')
-            else:
-                r_seqs[name] += line.strip()
-    return r_seqs
-
-
-def strip_split(string, expected=None):
-    if string:
-        s = string.strip('\n').rsplit('\t')
-        if expected and len(s) != expected:
-            # logging.error('expecting %i elements from split, got %i', expected, len(s))
-            raise ValueError('expecting %i elements from split, got %i', expected, len(s))
-        return s
+###########################################################
 
 
 def parse_prediction_file(predfile):
@@ -329,169 +259,189 @@ def parse_prediction_file(predfile):
 
 def write_parsed_results(methods, ref_seqs, **kwargs):
 
-    # result_dir = "/mnt/projects"
-    # parsed_dir = "/home/damiano/results_parsed"
-    # result_dir = "/home/damiano/Projects/caid/data/results_raw"
-    # parsed_dir_err = "/home/damiano/Projects/caid/data/results_parsed_err"
-    # parsed_dir = "/home/damiano/Projects/caid/data/results_parsed"
-
-    # Parse jron separately
-    inputfile = "{}/{}/{}".format(kwargs.get('result_dir'), methods['jron']['result_dir'], methods['jron']['result_file'])
-    jronn_data = parse_jronn(inputfile, methods['jronn'])
+    # Create local folder
+    if not os.path.exists(kwargs.get('parsed_dir')):
+        os.makedirs(kwargs.get('parsed_dir'))
 
     for method in methods:
-        # inputpath = "{}/CAID/2018_09/{}/results/{}".format(result_dir, method['group'], method['result_dir'])
-        inputpath = "{}/{}".format(kwargs.get('result_dir'), method['result_dir'])
-        errfile = "{}/{}_{}_{}{}.err".format(kwargs.get('parsed_dir_err'), method['id'], method['group'], method['result_dir'], method.get('label', ''))
-        outfile = "{}/{}_{}_{}{}.out".format(kwargs.get('parsed_dir'), method['id'], method['group'], method['result_dir'], method.get('label', ''))
-        if not os.path.isfile(outfile) or kwargs.get('overwrite_output'):
-            with open(errfile, 'w') as ferr:
-                if method['func'] is not None:
-                    with open(outfile, 'w') as fout:
 
-                        for disprot_id in ref_seqs:
+        # Input file
+        inputpath = "{}/{}".format(kwargs.get('raw_results_dir'), method['dir'])
+        logging.info("Parsing {} {}".format(inputpath, method['name']))
 
-                            ref_seq = ref_seqs[disprot_id]
-                            method['seq'] = ref_seq
+        if os.path.isdir(inputpath):
 
-                            is_good = True
-                            seq = None
-                            state = None
-                            scores = None
+            # Output file
+            outfile = "{}/{}_{}.out".format(kwargs.get('parsed_dir'), method['id'], method['name'])  # ex. D012_MobiDB-lite.out
 
-                            # Different treatment for JRONN
-                            if method['result_dir'] == "jronn":
-                                seq, state, scores = jronn_data.get(disprot_id, (None, None, None))
+            if not os.path.isfile(outfile) or kwargs.get('overwrite_output'):
+                with open(outfile, 'w') as fout:
 
-                            # All other methods (1 output file per protein)
+                    for disprot_id in ref_seqs:
+
+                        ref_seq = ref_seqs[disprot_id]
+                        method['seq'] = ref_seq
+
+                        is_good = True
+                        seq = None
+                        state = None
+                        scores = None
+
+                        if 'extension' in method:
+                            inputfile = "{}/{}{}".format(inputpath, disprot_id, method['extension'])
+                        else:
+                            inputfile = "{}/{}.out".format(inputpath, disprot_id)
+
+                        if os.path.isfile(inputfile):
+                            if os.stat(inputfile).st_size != 0:
+                                # seq, state, scores = method['func'](inputfile, method)
+                                try:
+                                    seq, state, scores = method['func'](inputfile, method)
+                                except Exception as e:
+                                    is_good = False
+                                    logging.error("Failed to parse: {} {} {}\n{}".format(disprot_id, method['name'], inputfile, traceback.format_exc()))
                             else:
-                                inputfile = "{}/{}{}".format(inputpath, disprot_id, method['extension'])
+                                is_good = False
+                                logging.error("Empty file: {} {} {}".format(disprot_id, method['name'], inputfile))
+                        else:
+                            is_good = False
+                            logging.error("Missing file: {} {} {}".format(disprot_id, method['name'], inputfile))
 
-                                if os.path.isfile(inputfile):
-                                    if os.stat(inputfile).st_size != 0:
-                                        # seq, state, scores = method['func'](inputfile, method)
-                                        try:
-                                            seq, state, scores = method['func'](inputfile, method)
-                                        except Exception as e:
-                                            is_good = False
-                                            ferr.write("ERROR NOT PARSED {} {}\n{}\n".format(disprot_id, inputfile, e))
-                                    else:
-                                        is_good = False
-                                        ferr.write("ERROR EMPTY FILE {} {}\n".format(disprot_id, inputfile))
-                                else:
-                                    is_good = False
-                                    ferr.write("ERROR MISSING FILE {} {}\n".format(disprot_id, inputfile))
+                        if is_good:
 
+                            # print scores
+                            # TODO check this test is enough to find errors (e.g. VSL DP01530)
+                            if not scores and not state:
+                                logging.error("Wrong output format {} {}".format(disprot_id, method['name']))
+                                is_good = False
+                            if state and len(state) != len(ref_seq):
+                                logging.error("Wrong state length {} {} {} ({})\n{}\n{}\n{}".format(disprot_id, method['name'], len(state),
+                                                                                      len(ref_seq), ref_seq,
+                                                                                      state, seq))
+                                is_good = False
+                            if scores and len(scores) != len(ref_seq):
+                                logging.error("Wrong score length {} {} {} ({})".format(disprot_id, method['name'], len(scores),
+                                                                                 len(ref_seq)))
+                                is_good = False
+
+                            # write the output
                             if is_good:
+                                fout.write(">{}\n{}\n".format(disprot_id, '\n'.join(["{}\t{}\t{}\t{}".format(
+                                    i + 1, ref_seq[i], scores[i] if scores else '', state[i] if state else '')
+                                                                                     for i in
+                                                                                     range(len(ref_seq))])))
+                # Check the format (consume the generator)
+                for _ in parse_prediction_file(outfile):
+                    pass
 
-                                # Build negatives when the output is missing (useful for region based predictors like foldunfold)
-                                if method.get('make_complement'):
-                                    state = '0' * len(ref_seq)
-
-                                # print scores
-                                # TODO check this test is enough to find errors (e.g. VSL DP01530)
-                                if not scores and not state:
-                                    ferr.write("ERROR MISSING CORRECT OUTPUT {}\n".format(disprot_id))
-                                    is_good = False
-                                if state and len(state) != len(ref_seq):
-                                    ferr.write(
-                                        "ERROR STATE LEN {} {} ({})\n{}\n{}\n{}\n".format(disprot_id, len(state),
-                                                                                          len(ref_seq), ref_seq,
-                                                                                          state, seq))
-                                    is_good = False
-                                if scores and len(scores) != len(ref_seq):
-                                    ferr.write("ERROR SCORE LEN {} {} ({})\n".format(disprot_id, len(scores),
-                                                                                     len(ref_seq)))
-                                    is_good = False
-                                if is_good:
-                                    # Write the output
-                                    fout.write(">{}\n{}\n".format(disprot_id, '\n'.join(["{}\t{}\t{}\t{}".format(
-                                        i + 1, ref_seq[i], scores[i] if scores else '', state[i] if state else '')
-                                                                                         for i in
-                                                                                         range(len(ref_seq))])))
-                    # Check the format (consume the generator)
-                    for _ in parse_prediction_file(outfile):
-                        pass
-
-                else:
-                    ferr.write("WARNING PARSER NOT IMPLEMENTED\n")
+            else:
+                logging.warning("Output file exists. Not writing {}".format(outfile))
         else:
-            print("WARNING NOT WRITING {}".format(outfile))
+            logging.error("Missing input dir {}".format(inputpath))
 
+        if os.stat(outfile).st_size == 0:
+            logging.warning("Empty output file, deleting {}".format(outfile))
+            os.remove(outfile)
     return
 
 
 if __name__ == "__main__":
 
-    # Generate some data for the method list below
-    # ls | while read line; do if[[-d $line / results]]; then ls $line / results | while read d; do echo "#" $line $d; ls $line / results / $d / DP00003 *; done; fi; done
+
     method_list = [
-        {'id': 'D001', 'group': 'callebaut', 'name': 'PyHCA', 'result_dir': 'pyhca', 'extension': '.out', 'func': parse_vertical_format, 'header_lines': 1, 'residue_pos': 1, 'score_pos': 2, 'status_th': 0.5},
-        {'id': 'D002', 'group': 'cheng', 'name': 'Predisorder', 'result_dir': 'predisorder', 'extension': '.out', 'func': parse_predisorder},
-        {'id': 'B001', 'group': 'dosztanyi', 'name': 'ANCHOR', 'result_dir': 'anchor', 'extension': '.fasta.out', 'func': parse_anchor},
-        {'id': 'D003', 'group': 'dosztanyi', 'name': 'IUPred2A-long', 'result_dir': 'iupred2al', 'extension': '.fasta.out', 'func': parse_vertical_format, 'header_lines': 6, 'residue_pos': 1, 'score_pos': 2, 'status_th': 0.5},
-        {'id': 'D004', 'group': 'dosztanyi', 'name': 'IUPred2A-short', 'result_dir': 'iupred2as', 'extension': '.fasta.out', 'func': parse_vertical_format, 'header_lines': 6, 'residue_pos': 1, 'score_pos': 2, 'status_th': 0.5},
-        {'id': 'B002', 'group': 'dosztanyi', 'name': 'IUPred2A-long', 'result_dir': 'iupred2al', 'extension': '.fasta.out', 'label': '_binding', 'func': parse_vertical_format, 'header_lines': 6, 'residue_pos': 1, 'score_pos': 3, 'status_th': 0.5},
-        {'id': 'B003', 'group': 'dosztanyi', 'name': 'IUPred2A-short', 'result_dir': 'iupred2as', 'extension': '.fasta.out', 'label': '_binding', 'func': parse_vertical_format, 'header_lines': 6, 'residue_pos': 1, 'score_pos': 3, 'status_th': 0.5},
-        {'id': 'D005', 'group': 'dosztanyi', 'name': 'IUPred-long', 'result_dir': 'iupredl', 'extension': '.flat.out', 'func': parse_vertical_format, 'header_lines': 0, 'residue_pos': 1, 'score_pos': 2, 'status_th': 0.5},
-        {'id': 'D006', 'group': 'dosztanyi', 'name': 'IUPred-short', 'result_dir': 'iupreds', 'extension': '.flat.out', 'func': parse_vertical_format, 'header_lines': 2, 'residue_pos': 1, 'score_pos': 2, 'status_th': 0.5},
-        {'id': 'D007', 'group': 'galzitskaya', 'name': 'FoldUnfold', 'result_dir': 'foldunfold', 'extension': '.out', 'func': parse_foldunfold, 'make_complement': True},
-        {'id': 'D008', 'group': 'galzitskaya', 'name': 'IsUnstruct', 'result_dir': 'isunstruct', 'extension': '.iul', 'func': parse_isunstruct},
-        {'id': 'D009', 'group': 'gibson', 'name': 'GlobPlot', 'result_dir': 'globplot', 'extension': '.flat.out', 'func': parse_globplot},
-        {'id': 'B004', 'group': 'gsponer', 'name': 'MoRFchibi-light', 'result_dir': 'mcl', 'extension': '.out', 'func': parse_mcl, 'header_lines': 14, 'residue_pos': 1, 'score_pos': 2, 'status_th': 0.725},
-        {'id': 'B005', 'group': 'gsponer', 'name': 'MoRFchibi-web', 'result_dir': 'mcw', 'extension': '.out', 'func': parse_mcw, 'header_lines': 17, 'residue_pos': 1, 'score_pos': 2, 'status_th': 0.725, 'use_conservation': True},
-        {'id': 'D010', 'group': 'hoque', 'name': 'DisPredict-2', 'result_dir': 'dispred2', 'extension': '.drp', 'func': parse_vertical_format, 'header_lines': 6, 'residue_pos': 0, 'score_pos': 2, 'status_pos': 1, 'status_char': 'D', 'use_conservation': True},
-        {'id': 'D011', 'group': 'jones', 'name': 'DISOPRED-3.1', 'result_dir': 'disopred3', 'extension': '.diso', 'label': '_disorder', 'func': parse_vertical_format, 'header_lines': 3, 'residue_pos': 1, 'score_pos': 3, 'status_pos': 2, 'status_char': '*', 'use_conservation': True},
-        {'id': 'B013', 'group': 'jones', 'name': 'DISOPRED-3.1', 'result_dir': 'disopred3', 'extension': '.pbdat', 'label': '_binding', 'func': parse_vertical_format, 'header_lines': 5, 'residue_pos': 1, 'score_pos': 3, 'status_pos': 2, 'status_char': '^', 'use_conservation': True},
-        {'id': 'D032', 'group': 'kurgan', 'name': 'DFLpred', 'result_dir': 'dflpred', 'extension': '.out', 'func': parse_dflpred},
-        {'id': 'B007', 'group': 'kurgan', 'name': 'DisoRDPbind', 'result_dir': 'disordpbind', 'extension': '', 'label': '_all', 'func': parse_disordpbind_all},
-        {'id': 'B008', 'group': 'kurgan', 'name': 'DisoRDPbind-RNA', 'result_dir': 'disordpbind', 'extension': '', 'label': '_rna', 'func': parse_disordpbind_rna},
-        {'id': 'B009', 'group': 'kurgan', 'name': 'DisoRDPbind-DNA', 'result_dir': 'disordpbind', 'extension': '', 'label': '_dna', 'func': parse_disordpbind_dna},
-        {'id': 'B010', 'group': 'kurgan', 'name': 'DisoRDPbind-protein', 'result_dir': 'disordpbind', 'extension': '', 'label': '_protein', 'func': parse_disordpbind_prot},
-        {'id': 'D013', 'group': 'kurgan', 'name': 'fIDPln', 'result_dir': 'fidp', 'extension': '.log.pred', 'label': '_log', 'func': parse_vertical_format, 'header_lines': 0, 'residue_pos': 1, 'score_pos': 2, 'status_pos': 3, 'status_char': '1'},
-        {'id': 'D014', 'group': 'kurgan', 'name': 'fIDPnn', 'result_dir': 'fidp', 'extension': '.nn.pred', 'label': '_nn', 'func': parse_vertical_format, 'header_lines': 0, 'residue_pos': 1, 'score_pos': 2, 'status_pos': 3, 'status_char': '1'},
-        {'id': 'B011', 'group': 'kurgan', 'name': 'fMoRFpred', 'result_dir': 'fmorfpred', 'extension': '.out', 'func': parse_fmorfpred},
-        {'id': 'D015', 'group': 'obradovic', 'name': 'VSL2B', 'result_dir': 'vsl2', 'extension': '.flat.out', 'func': parse_vsl2},
-        {'id': 'D016', 'group': 'russel', 'name': 'DisEMBL-HL', 'result_dir': 'disembl', 'extension': '.flat.out', 'label': '_HL', 'func': parse_disHL},
-        {'id': 'D017', 'group': 'russel', 'name': 'DisEMBL-465', 'result_dir': 'disembl', 'extension': '.flat.out', 'label': '_465', 'func': parse_dis465},
-        {'id': 'B012', 'group': 'sharma', 'name': 'OPAL', 'result_dir': 'opal', 'extension': '.txt', 'func': parse_vertical_format, 'header_lines': 1, 'residue_pos': 1, 'score_pos': 2, 'use_conservation': True},
-        {'id': 'D018', 'group': 'tosatto', 'name': 'ESpritz-D', 'result_dir': 'espritzd', 'extension': '.disbin.out', 'func': parse_vertical_format, 'header_lines': 8, 'score_pos': 1, 'status_pos': 0, 'status_char': 'D'},
-        {'id': 'D019', 'group': 'tosatto', 'name': 'ESpritz-N', 'result_dir': 'espritzn', 'extension': '.disbin.out', 'func': parse_vertical_format, 'header_lines': 8, 'score_pos': 1, 'status_pos': 0, 'status_char': 'D'},
-        {'id': 'D020', 'group': 'tosatto', 'name': 'ESpritz-X', 'result_dir': 'espritzx', 'extension': '.disbin.out', 'func': parse_vertical_format, 'header_lines': 8, 'score_pos': 1, 'status_pos': 0, 'status_char': 'D'},
-        {'id': 'D021', 'group': 'tosatto', 'name': 'MobiDB-lite', 'result_dir': 'mobidblite', 'extension': '.fasta.out', 'func': parse_mobidblite},
-        {'id': 'D022', 'group': 'vendruscolo', 'name': 'S2D-1', 'result_dir': 's2d1', 'extension': '.out', 'func': parse_vertical_format, 'header_lines': 2, 'residue_pos': 1, 'score_pos': 4, 'status_pos': 5, 'status_char': 'C', 'use_conservation': True},
-        {'id': 'D023', 'group': 'vendruscolo', 'name': 'S2D-2', 'result_dir': 's2d2', 'extension': '.out', 'func': parse_vertical_format, 'header_lines': 2, 'residue_pos': 1, 'score_pos': 4, 'status_pos': 6, 'status_char': 'C', 'use_conservation': True},
-        {'id': 'D024', 'group': 'vranken', 'name': 'DisoMine', 'result_dir': 'disomine', 'extension': '.out', 'func': parse_vertical_format, 'header_lines': 0, 'residue_pos': 2, 'score_pos': 3, 'status_pos': 4, 'status_char': '1'},
-        {'id': 'D025', 'group': 'wallner', 'name': 'RawMSA', 'result_dir': 'rawmsa', 'extension': '.pred', 'func': parse_vertical_format, 'header_lines': 0, 'status_pos': 1, 'status_char': '1', 'use_conservation': True},
-        {'id': 'D026', 'group': 'xu', 'name': 'AUCpreD', 'result_dir': 'aucpred', 'extension': '.diso', 'func': parse_vertical_format, 'header_lines': 3, 'residue_pos': 1, 'score_pos': 3, 'status_pos': 2, 'status_char': '*', 'use_conservation': True},
-        {'id': 'D027', 'group': 'xu', 'name': 'AUCpreD-np', 'result_dir': 'aucpred_no_profile', 'extension': '.diso', 'func': parse_vertical_format, 'header_lines': 3, 'residue_pos': 1, 'score_pos': 3, 'status_pos': 2, 'status_char': '*'},
-        {'id': 'D028', 'group': 'zhou', 'name': 'SPOT-Disorder1', 'result_dir': 'spot-disorder1', 'extension': '.spotd', 'func': parse_vertical_format, 'header_lines': 1, 'residue_pos': 1, 'score_pos': 2, 'status_pos': 3, 'status_char': 'D', 'use_conservation': True},
-        {'id': 'D029', 'group': 'zhou', 'name': 'SPOT-Disorder2', 'result_dir': 'spot-disorder2', 'extension': '.spotd2', 'func': parse_vertical_format, 'header_lines': 2, 'residue_pos': 1, 'score_pos': 2, 'status_pos': 3, 'status_char': 'D', 'use_conservation': True},
-        {'id': 'D030', 'group': 'zhou', 'name': 'SPOT-Disorder-Single', 'result_dir': 'spot-disorder-single', 'extension': '.spotds', 'func': parse_vertical_format, 'header_lines': 2, 'residue_pos': 1, 'score_pos': 2, 'status_pos': 3, 'status_char': 'D'},
-        {'id': 'D031', 'group': 'esnouf', 'name': 'JRONN', 'result_dir': 'jronn', 'outfile': 'results_jronn.txt', 'func': parse_jronn, 'status_th': 0.5},
-        {'id': 'D033', 'group': 'vranken', 'name': 'DynaMine', 'result_dir': 'dynamine', 'extension': '', 'func': None}
+        {'name': 'PyHCA', 'func': parse_vertical_format, 'header_lines': 1, 'residue_pos': 1, 'score_pos': 2, 'status_th': 0.5},
+        {'name': 'IUPred2A-long', 'func': parse_vertical_format, 'header_lines': 7, 'residue_pos': 1, 'score_pos': 2, 'status_th': 0.5},
+        {'name': 'IUPred2A-short', 'func': parse_vertical_format, 'header_lines': 7, 'residue_pos': 1, 'score_pos': 2, 'status_th': 0.5},
+        {'name': 'ANCHOR-2', 'func': parse_vertical_format, 'header_lines': 7, 'residue_pos': 1, 'score_pos': 3, 'status_th': 0.5},
+        {'name': 'DisPredict-2', 'func': parse_vertical_format, 'header_lines': 6, 'residue_pos': 0, 'score_pos': 2, 'status_pos': 1, 'status_char': 'D'},
+        {'name': 'OPAL', 'func': parse_vertical_format, 'header_lines': 1, 'residue_pos': 1, 'score_pos': 2},
+        {'name': 'S2D-1', 'func': parse_vertical_format, 'header_lines': 2, 'residue_pos': 1, 'score_pos': 4, 'status_pos': 5, 'status_char': 'C'},
+        {'name': 'S2D-2', 'func': parse_vertical_format, 'header_lines': 2, 'residue_pos': 1, 'score_pos': 4, 'status_pos': 6, 'status_char': 'C'},
+        {'name': 'DisoMine', 'func': parse_vertical_format, 'header_lines': 0, 'residue_pos': 2, 'score_pos': 3, 'status_pos': 4, 'status_char': '1'},
+        {'name': 'RawMSA', 'func': parse_vertical_format, 'header_lines': 0, 'score_pos': 1, 'status_th': 0.5},
+        {'name': 'AUCpreD', 'func': parse_vertical_format, 'header_lines': 3, 'residue_pos': 1, 'score_pos': 3, 'status_pos': 2, 'status_char': '*'},
+        {'name': 'AUCpreD-np', 'func': parse_vertical_format, 'header_lines': 3, 'residue_pos': 1, 'score_pos': 3, 'status_pos': 2, 'status_char': '*'},
+        {'name': 'SPOT-Disorder1', 'func': parse_vertical_format, 'header_lines': 1, 'residue_pos': 1, 'score_pos': 2, 'status_pos': 3, 'status_char': 'D'},
+        {'name': 'SPOT-Disorder2', 'func': parse_vertical_format, 'header_lines': 2, 'residue_pos': 1, 'score_pos': 2, 'status_pos': 3, 'status_char': 'D'},
+        {'name': 'SPOT-Disorder-Single', 'func': parse_vertical_format, 'header_lines': 2, 'residue_pos': 1, 'score_pos': 2, 'status_pos': 3, 'status_char': 'D'},
+
+        {'name': 'DISOPRED-3.1', 'func': parse_vertical_format, 'header_lines': 3, 'residue_pos': 1, 'score_pos': 3, 'status_pos': 2, 'status_char': '*'},
+        {'name': 'DISOPRED-3.1-binding', 'func': parse_vertical_format, 'header_lines': 5, 'residue_pos': 1, 'score_pos': 3, 'status_pos': 2, 'status_char': '^'},
+        {'name': 'fIDPln', 'extension': '.log_out', 'func': parse_vertical_format, 'header_lines': 0, 'residue_pos': 1, 'score_pos': 2, 'status_pos': 3, 'status_char': '1'},
+        {'name': 'fIDPnn', 'extension': '.nn_out', 'func': parse_vertical_format, 'header_lines': 0, 'residue_pos': 1, 'score_pos': 2, 'status_pos': 3, 'status_char': '1'},
+
+        {'name': 'DisoRDPbind', 'func': parse_disordpbind_all},
+        {'name': 'DisoRDPbind-RNA', 'func': parse_disordpbind_rna},
+        {'name': 'DisoRDPbind-DNA', 'func': parse_disordpbind_dna},
+        {'name': 'DisoRDPbind-protein', 'func': parse_disordpbind_prot},
+
+        {'name': 'Predisorder', 'func': parse_predisorder},
+        {'name': 'FoldUnfold', 'func': parse_foldunfold},
+        {'name': 'IsUnstruct', 'func': parse_isunstruct},
+        {'name': 'MoRFchibi-light', 'func': parse_mcl, 'header_lines': 14, 'residue_pos': 1, 'score_pos': 2, 'status_th': 0.725},
+        {'name': 'MoRFchibi-web', 'func': parse_mcw, 'header_lines': 17, 'residue_pos': 1, 'score_pos': 2, 'status_th': 0.725},
+        {'name': 'DFLpred', 'func': parse_dflpred},
+        {'name': 'fMoRFpred', 'func': parse_fmorfpred},
+
+        {'name': 'MobiDB-lite', 'func': parse_mobidblite, 'method_name': 'mobidb_lite'},
+        {'name': 'ANCHOR', 'func': parse_mobidblite, 'method_name': 'anchor'},
+        {'name': 'IUPred-long', 'func': parse_mobidblite, 'method_name': 'iupl'},
+        {'name': 'IUPred-short', 'func': parse_mobidblite, 'method_name': 'iups'},
+        {'name': 'GlobPlot', 'func': parse_mobidblite, 'method_name': 'glo', 'rescale': True},
+        {'name': 'VSL2B', 'func': parse_mobidblite, 'method_name': 'vsl'},
+        {'name': 'DisEMBL-HL', 'func': parse_mobidblite, 'method_name': 'disHL'},
+        {'name': 'DisEMBL-465', 'func': parse_mobidblite, 'method_name': 'dis465'},
+        {'name': 'ESpritz-D', 'func': parse_mobidblite, 'method_name': 'espD'},
+        {'name': 'ESpritz-N', 'func': parse_mobidblite, 'method_name': 'espN'},
+        {'name': 'ESpritz-X', 'func': parse_mobidblite, 'method_name': 'espX'},
+        {'name': 'DynaMine', 'func': parse_mobidblite, 'method_name': 'dynamine'},
+        {'name': 'JRONN', 'func': parse_mobidblite, 'method_name': 'jronn'}
     ]
 
+    out_log_file = "parse_output.log"
+
+    logging.basicConfig(filename=out_log_file,
+                        level=logging.getLevelName("INFO"),
+                        format='%(asctime)s - %(process)d - %(levelname)s - %(message)s')
+
+    logging.info("CAID parsing started")
+
+    module_dir = os.path.abspath(os.path.dirname(__file__))
+    logging.info("Module running from: {}".format(module_dir))
+
     # Mount caid folder somewhere
-    # sudo mount 172.21.2.101:/volume1/Projects projects
-    # From IDRA
-    # sudo sshfs dampiove@protein.bio.unipd.it:/projects /mnt/projects/ -o IdentityFile='/home/damiano/.ssh/id_rsa',allow_other
+    # sudo apt install nfs-common
+    # (obsolete) sudo sshfs dampiove@protein.bio.unipd.it:/projects /mnt/projects/ -o IdentityFile='/home/damiano/.ssh/id_rsa',allow_other
+    # (obsolete) sudo mount 172.21.2.103:/volume1/Pleiadi/projects/CAID/2018_09 /home/damiano/Projects/caid_data/remote/
+    # sudo mount 172.21.2.103:/volume1/Pleiadi/projects/CAID/results /home/damiano/Projects/caid/data/results/
+
+    with open("../data/method_names.json") as f:
+        objs = json.load(f)
+
+    for method in method_list:
+        for ele in objs:
+            if ele['name'] == method['name']:
+                method.update(ele)
+                break
+
 
     # Parse reference sequences
-    reference_sequences = parse_reference_sequences("/home/damiano/Projects/caid/data/disprot8_all.fasta")
+    reference_sequences = parse_reference_sequences("../data/disprot8_all.fasta", filter_targets="../data/new_id_list.txt")
 
-    # write_parsed_results(method_list, reference_sequences,
-    #                      result_dir="/home/damiano/Projects/caid/data/results_raw",
-    #                      parsed_dir_err="/home/damiano/Projects/caid/data/results_parsed_err",
-    #                      parsed_dir="/home/damiano/Projects/caid/data/results_parsed",
-    #                      overwrite_output=False)
+    write_parsed_results(method_list,
+                         reference_sequences,
+                         raw_results_dir="/home/damiano/Projects/caid/data/results",
+                         parsed_dir="/home/damiano/Projects/caid/data/results_parsed",
+                         overwrite_output=False)
 
     # Print the dictionary {id: name}
-    for method in method_list:
-        print("{}\t{}\t{}".format(method['id'], method['name'], method.get('use_conservation', False)))
+    # for method in method_list:
+    #     print("{}\t{}\t{}".format(method['id'], method['name'], method.get('use_conservation', False)))
 
-    # TODO calculate DynaMine
+
     # TODO chek opposite predictions (see rocs)
-    # TODO check wallner confidence (python3)
-    # TODO check ANCHOR/IUPRED
-    # TODO check MorfChibi qsub (wrong target IDs)
+
+    # TODO ifdp has two extentions in the same folder for two different predictors
+
+    # TODO check foldunfold empty file means fully structured or crash
+

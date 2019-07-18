@@ -118,6 +118,7 @@ def filter_polyproteins(proteins):
 def get_identical_regions(proteins, same_region_outfile):
     """
     Test identical regions in multiple proteins (transfer by homology)
+    to be fixed in the database (curators errors)
     """
 
     region_ids = {}
@@ -167,6 +168,9 @@ def get_identical_regions(proteins, same_region_outfile):
         ))
 
 
+#######################################################################################################################
+
+
 def write_fasta(proteins, outfile):
     with open(outfile, 'w') as fout:
         for disprot_id in proteins:
@@ -180,6 +184,9 @@ def write_fasta(proteins, outfile):
 
 
 def write_sentences(proteins, outfile):
+    """
+    For Patrik Ruch
+    """
     with open(outfile, 'w') as fout:
         fout.write(
             "#disprot\tuniprot\tpmid\tmethod\tregion_start\tregion_end\ttype_or_section\ttext\n")
@@ -195,6 +202,35 @@ def write_sentences(proteins, outfile):
                                                                          region['generif'][
                                                                              'text'].encode(
                                                                              'utf-8')))
+
+
+#######################################################################################################################
+
+
+def launch_iprscan(proteins):
+    with NamedTemporaryFile(mode='w', delete=False) as f_fasta:
+        for disprot_id in proteins:
+            protein = proteins[disprot_id]
+
+            f_fasta.write(">{} {}\n{}\n".format(disprot_id, protein.get('uniprot_accession'),
+                                                protein.get('sequence')))
+
+    ipr = interproscan.InterProScanLauncher([f_fasta.name, '-o', '.'])
+    ipr.run(bindir='/home/marnec/lib/interproscan-5.19-58.0')
+
+    return ipr.outfile
+
+
+def get_ipr_regions(ipr_outfile):
+    ipr_regions = {}
+    for group in groupby(open(ipr_outfile), key=lambda l: l.split()[0]):
+        acc = group[0]
+        regs = list(map(lambda s: list(map(int, s.strip('\n').split('\t')[6:8])), group[1]))
+        ipr_regions[acc] = regs
+    return ipr_regions
+
+
+#######################################################################################################################
 
 
 def write_caid_references_pdb(proteins, outdir, label, ref_names):
@@ -373,111 +409,6 @@ def write_caid_references_simple(proteins, outdir, label, ref_names):
                                                        ''.join(data[k]['state'])))
 
 
-def caid_reference_stats(inputdir, label, ref_names):
-    data = {}
-    c = 0
-    for k in ref_names:
-        data.setdefault(k, [])
-        with open("{}/{}_{}.txt".format(inputdir, label, k)) as f:
-            for line in f:
-                if line[0] != '#':
-                    if line[0] == '>':
-                        # name = line.strip().split()[0][1:]
-                        c = 0
-                    elif c == 1:
-                        pass
-                    elif c == 2:
-                        data[k].append(line.strip())
-                    c += 1
-
-    for k in ref_names:
-
-        # print data[k][0]
-        # print count_regions(data[k][0])
-        # break
-
-        counts_str = Counter()
-        regions_str = Counter()
-        regions_str_long = 0
-
-        counts_len = Counter()
-        regions_len = Counter()
-        regions_len_long = 0
-
-        for state in data[k]:
-            regdist_str, regdist_str_size = count_regions(state)
-            regdist_len, regdist_len_size = count_regions(state.replace('-', '0'))
-
-            regions_str_long += sum(
-                [1 if ann == '1' and (end - start + 1) >= 20 else 0 for start, end, ann in
-                 regdist_str_size])
-            regions_len_long += sum(
-                [1 if ann == '1' and (end - start + 1) >= 20 else 0 for start, end, ann in
-                 regdist_len_size])
-
-            counts_str.update(Counter(state))
-            regions_str.update(Counter(regdist_str))
-            counts_len.update(Counter(state.replace('-', '0')))
-            regions_len.update(Counter(regdist_len))
-
-        tot_str = sum([counts_str[i] for i in counts_str])
-        tot_len = sum([counts_len[i] for i in counts_len])
-
-        print("{} {} {} {} {} {}".format(k, len(data[k]),
-                                         tot_len,
-                                         "{} {} {} {} {}".format(counts_len['1'], counts_len['0'],
-                                                                 regions_len['1'],
-                                                                 regions_len['0'],
-                                                                 regions_len_long), tot_str,
-                                         "{} {} {} {} {}".format(counts_str['1'], counts_str['0'],
-                                                                 regions_str['1'],
-                                                                 regions_str['0'],
-                                                                 regions_str_long)))
-
-
-def count_regions(state):
-    # print state
-    c = {}
-    regions = []
-    start = 0
-    for i in range(len(state)-1):
-        if state[i] != state[i+1]:
-            c.setdefault(state[i], 0)
-            c[state[i]] += 1
-            regions.append((start, i, state[i]))
-            start = i + 1
-    # Last region
-    c.setdefault(state[-1], 0)
-    c[state[-1]] += 1
-    regions.append((start, i + 1, state[-1]))
-
-    return c, regions
-
-
-def blast_similarity(blastfile, new_targets, old_targets):
-    data = {}
-    with open(blastfile) as f:
-        for line in f:
-            a, b, identity, al_len, mismatch, gapopen, \
-            qstart, qend, start, send, evalue, bitscore = line.strip().split()
-
-            l_a = len(new_targets[a]['sequence']) if new_targets.get(a) else len(
-                old_targets[a]['sequence'])
-            l_b = len(new_targets[b]['sequence']) if new_targets.get(b) else len(
-                old_targets[b]['sequence'])
-            identity = 2.0 * (int(al_len) - int(mismatch)) * 100.0 / float(l_a + l_b)
-
-            if a != b:
-                data.setdefault(a, {'new': (0.0, None), 'old': (0.0, None)})
-                if b in new_targets:
-                    if identity > data[a]['new'][0]:
-                        data[a]['new'] = (identity, b)
-                else:
-                    if identity > data[a]['old'][0]:
-                        data[a]['old'] = (identity, b)
-    return data
-
-
 def write_fess_reference(proteins, outdir, label, ref_names):
     data = {}
     for k in ref_names:
@@ -523,28 +454,6 @@ def write_fess_reference(proteins, outdir, label, ref_names):
                                                                 "pdb_missing_residues", [])]),
                                                        protein['sequence'],
                                                        ''.join(data[k]['state'])))
-
-def launch_iprscan(proteins):
-    with NamedTemporaryFile(mode='w', delete=False) as f_fasta:
-        for disprot_id in proteins:
-            protein = proteins[disprot_id]
-
-            f_fasta.write(">{} {}\n{}\n".format(disprot_id, protein.get('uniprot_accession'),
-                                                protein.get('sequence')))
-
-    ipr = interproscan.InterProScanLauncher([f_fasta.name, '-o', '.'])
-    ipr.run(bindir='/home/marnec/lib/interproscan-5.19-58.0')
-
-    return ipr.outfile
-
-
-def get_ipr_regions(ipr_outfile):
-    ipr_regions = {}
-    for group in groupby(open(ipr_outfile), key=lambda l: l.split()[0]):
-        acc = group[0]
-        regs = list(map(lambda s: list(map(int, s.strip('\n').split('\t')[6:8])), group[1]))
-        ipr_regions[acc] = regs
-    return ipr_regions
 
 
 def write_caid_references_gene3d(proteins, outdir, label, ref_names):
@@ -776,6 +685,152 @@ def write_caid_references_pdbreverse(proteins, outdir, label, ref_names):
                                                        ''.join(data[k]['state'])))
 
 
+#######################################################################################################################
+
+
+# def caid_reference_stats(inputdir, label, ref_names):
+#     data = {}
+#     c = 0
+#     for k in ref_names:
+#         data.setdefault(k, [])
+#         with open("{}/{}-{}.txt".format(inputdir, label, k)) as f:
+#             for line in f:
+#                 if line[0] != '#':
+#                     if line[0] == '>':
+#                         # name = line.strip().split()[0][1:]
+#                         c = 0
+#                     elif c == 1:
+#                         pass
+#                     elif c == 2:
+#                         data[k].append(line.strip())
+#                     c += 1
+#
+#     for k in ref_names:
+#
+#         # print data[k][0]
+#         # print count_regions(data[k][0])
+#         # break
+#
+#         counts_str = Counter()
+#         regions_str = Counter()
+#         regions_str_long = 0
+#
+#         counts_len = Counter()
+#         regions_len = Counter()
+#         regions_len_long = 0
+#
+#         for state in data[k]:
+#             regdist_str, regdist_str_size = count_regions(state)
+#             regdist_len, regdist_len_size = count_regions(state.replace('-', '0'))
+#
+#             regions_str_long += sum(
+#                 [1 if ann == '1' and (end - start + 1) >= 20 else 0 for start, end, ann in
+#                  regdist_str_size])
+#             regions_len_long += sum(
+#                 [1 if ann == '1' and (end - start + 1) >= 20 else 0 for start, end, ann in
+#                  regdist_len_size])
+#
+#             counts_str.update(Counter(state))
+#             regions_str.update(Counter(regdist_str))
+#             counts_len.update(Counter(state.replace('-', '0')))
+#             regions_len.update(Counter(regdist_len))
+#
+#         tot_str = sum([counts_str[i] for i in counts_str])
+#         tot_len = sum([counts_len[i] for i in counts_len])
+#
+#         # name proteins res_tot res_pos res_neg reg_pos reg_neg reg_long ...
+#         print("{} {} {} {} {} {}".format(k, len(data[k]),
+#                                          tot_len,
+#                                          "{} {} {} {} {}".format(counts_len['1'], counts_len['0'],
+#                                                                  regions_len['1'],
+#                                                                  regions_len['0'],
+#                                                                  regions_len_long), tot_str,
+#                                          "{} {} {} {} {}".format(counts_str['1'], counts_str['0'],
+#                                                                  regions_str['1'],
+#                                                                  regions_str['0'],
+#                                                                  regions_str_long)))
+
+
+def caid_reference_stats(inputdir, name):
+
+    # print("name, total_proteins, total_residues, res_pos, res_neg, res_mask, reg_pos, reg_neg, reg_mask, reg_long_pos, reg_long_neg, reg_long_mask")
+
+
+    data = []
+    c = 0
+    p = 0
+    with open("{}/{}.txt".format(inputdir, name)) as f:
+        for line in f:
+            if line[0] != '#':
+                if line[0] == '>':
+                    # name = line.strip().split()[0][1:]
+                    c = 0
+                    p += 1
+                elif c == 1:
+                    pass
+                elif c == 2:
+                    data.append(line.strip())
+                c += 1
+
+    n_residues = Counter()
+    n_regions = Counter()
+    n_regions_long = Counter()
+    for state in data:
+        regions = get_regions(state)
+        n_regions.update(Counter([ann for start, end, ann in regions]))
+        n_regions_long.update(Counter([ann for start, end, ann in regions if (end - start + 1) >= 20]))
+        n_residues.update(Counter(state))
+    tot = sum([n_residues[i] for i in n_residues])
+
+    result = p, tot, *[n_residues.get(s, 0) for s in ['1', '0', '-']], *[n_regions.get(s, 0) for s in ['1', '0', '-']], *[n_regions_long.get(s, 0) for s in ['1', '0', '-']]
+
+    return ",".join([str(ele) for ele in result])
+
+
+def get_regions(state):
+    """
+    return the regions [(0, 1108, '0'), (1109, 1161, '1')]
+    """
+    # print state
+    regions = []
+    start = 0
+    for i in range(len(state)-1):
+        if state[i] != state[i+1]:
+            regions.append((start, i, state[i]))
+            start = i + 1
+    # Last region
+    regions.append((start, i + 1, state[-1]))
+
+    return regions
+
+
+# def blast_similarity(blastfile, new_targets, old_targets):
+#     data = {}
+#     with open(blastfile) as f:
+#         for line in f:
+#             a, b, identity, al_len, mismatch, gapopen, \
+#             qstart, qend, start, send, evalue, bitscore = line.strip().split()
+#
+#             l_a = len(new_targets[a]['sequence']) if new_targets.get(a) else len(
+#                 old_targets[a]['sequence'])
+#             l_b = len(new_targets[b]['sequence']) if new_targets.get(b) else len(
+#                 old_targets[b]['sequence'])
+#             identity = 2.0 * (int(al_len) - int(mismatch)) * 100.0 / float(l_a + l_b)
+#
+#             if a != b:
+#                 data.setdefault(a, {'new': (0.0, None), 'old': (0.0, None)})
+#                 if b in new_targets:
+#                     if identity > data[a]['new'][0]:
+#                         data[a]['new'] = (identity, b)
+#                 else:
+#                     if identity > data[a]['old'][0]:
+#                         data[a]['old'] = (identity, b)
+#     return data
+
+
+
+
+
 ########################################################################################################################
 # UniRef statistic
 # egrep -o "UniRef90_[A-Z,0-9]*\b" | sort | uniq -c | sort -n
@@ -784,7 +839,7 @@ def write_caid_references_pdbreverse(proteins, outdir, label, ref_names):
 # prot = parse_entries("../data/curated_entries/entries_curators_disprot8.json")
 
 # Entries fixed by Andras
-prot = parse_entries("/home/marnec/Projects/CAID/caid/data/entries_curators_20181122.json")
+prot = parse_entries("../data/entries_curators_20181122.json")
 logging.info("parsed entries %i", len(prot))
 
 good_prot = filter_bad_entries(prot)
@@ -806,7 +861,7 @@ logging.info("old proteins %i", len(old_prot))
 # Seqeunces for CAID predictors
 # write_fasta(prot, "../data/curated_entries/sequences_all.fasta")
 
-# Dataset fro Patrick
+# Dataset for Patrick
 # write_sentences(prot, '../data/sentences.txt')
 
 
@@ -832,35 +887,24 @@ reference_names_counted = list(map(lambda s: s + '_evidence-num', reference_name
 # write_caid_references_simple(old_prot, '../data/disorder', 'old', reference_names_simple)
 # write_caid_references_pdb(new_prot, '../data/disorder', 'new', reference_names_pdb)
 # write_caid_references_pdb(old_prot, '../data/disorder', 'old', reference_names_pdb)
-# write_caid_references_gene3d(new_prot, '../data/disorder', 'new', reference_names_gene3d)
-# write_caid_references_gene3d(old_prot, '../data/disorder', 'old', reference_names_gene3d)
+# # write_caid_references_gene3d(new_prot, '../data/disorder', 'new', reference_names_gene3d)  # require interproscan
+# # write_caid_references_gene3d(old_prot, '../data/disorder', 'old', reference_names_gene3d)  # require interproscan
+# # write_caid_references_gene3dreverse(new_prot, '../data/disorder', 'new', ['gene3d-r_simple'])  # require interproscan
+# write_caid_references_pdbreverse(new_prot, '../data/disorder', 'new', ['pdb-r_simple'])
+# write_caid_references_simple_nopdb(new_prot, '../data/disorder', 'new', ['disprot-all_simple-nopdb'])
+# # write_caid_references_simpleevidencenum(new_prot, '../data/disorder', 'new', ['disprot-all_simple-evidence-num'])
+# # write_fess_reference(new_prot, '../data/disorder', 'new', ['fess'])  # require fess
 
-write_caid_references_gene3dreverse(new_prot, '../data/disorder', 'new', ['gene3d-r_simple'])
-write_caid_references_pdbreverse(new_prot, '/home/marnec/Projects/CAID/caid/data/disorder', 'new', ['pdb-r_simple'])
-# write_caid_references_simple_nopdb(new_prot, '/home/marnec/Projects/CAID/data/disorder', 'new', ['disprot-all_simple-nopdb'])
-# write_caid_references_simpleevidencenum(new_prot, '/home/marnec/Projects/CAID/data/disorder', 'new', ['disprot-all_simple-evidence-num'])
+with open("../data/disorder_content.csv", "w") as fout:
+    fout.write("name,total_proteins,total_residues,res_pos,res_neg,res_mask,reg_pos,reg_neg,reg_mask,reg_long_pos,reg_long_neg,reg_long_mask\n")
 
-# write_fess_reference(new_prot, '../data/disorder', 'new', ['fess'])
+    for k in ['new', 'old']:
+        for ele in [reference_names_pdb, reference_names_simple]:
+            for label in ele:
+                name = "{}-{}".format(k, label)
 
-
-# caid_reference_stats('../data/reference', 'new', reference_names)
-# caid_reference_stats('../data/reference', 'old', reference_names)
-
-
-# similarity =  blast_similarity("../data/blast/blast.out", new_prot, old_prot)
-#
-# for disprot_id in similarity:
-#
-#     # All
-#     # print disprot_id, "new" if new_prot.get(disprot_id) else "old", similarity[disprot_id]['new'][0] if similarity[disprot_id]['new'][0] > similarity[disprot_id]['old'][0] else similarity[disprot_id]['old'][0]
-#
-#     # New vs new
-#     if new_prot.get(disprot_id):
-#         print(disprot_id, similarity[disprot_id]['new'][0])
+                fout.write("{},{}\n".format(name, caid_reference_stats('../data/disorder', name)))
 
 
-    # # New vs old
-    # if new_prot.get(disprot_id):
-    #     print disprot_id, similarity[disprot_id]['old'][0]
 
 
