@@ -22,7 +22,7 @@
   {"id": "B008", "group": "kurgan", "name": "DisoRDPbind-RNA", "dir": "disordpbind"},
   {"id": "B009", "group": "kurgan", "name": "DisoRDPbind-DNA", "dir": "disordpbind"},
   {"id": "B010", "group": "kurgan", "name": "DisoRDPbind-protein", "dir": "disordpbind"},
-  {"id": "D002", "group": "cheng", "name": "Predisorder", "dir": "predisorder", "evolution":  true},
+  {"id": "D002", "group": "cheng", "name": "Predisorder", "dir": "predisorder"},
   {"id": "D007", "group": "galzitskaya", "name": "FoldUnfold", "dir": "foldunfold"},
   {"id": "D008", "group": "galzitskaya", "name": "IsUnstruct", "dir": "isunstruct"},
   {"id": "B004", "group": "gsponer", "name": "MoRFchibi-light", "dir": "mcl"},
