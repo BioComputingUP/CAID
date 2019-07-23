@@ -58,6 +58,7 @@ for method in sorted(methods_list, key=lambda k: k['name']):
 
     if method['dir'] == "disopred3-binding":
         outfile = "../data/qsub/out/{}".format(method['dir'].split("-")[0])  # its disopred3 and not disopred3-binding
+        print("Fixed disopred3-binding !!!")
 
     if outfile is not None:
         targets = {}
@@ -138,6 +139,7 @@ ax.set_xscale("log")
 for patch, color in zip(bplot['boxes'], time_colors_d):
     patch.set_facecolor(color)
 
+plt.grid(linestyle='--', linewidth=0.5)
 plt.tight_layout()
 plt.savefig('../data/cputime_disorder.png'.format(), dpi=300)
 
@@ -148,6 +150,8 @@ fig, ax = plt.subplots(figsize=(5, 7))
 # bplot = ax.boxplot(time_methods, labels=["{}{}".format(method['name'], '*' if method["dir"] == "mobidblite" else '') for method in time_methods_labels], sym="", patch_artist=True, vert=False)
 bplot = ax.boxplot(time_methods_b, labels=["{}{}".format('*' if "evolution" in method else '', method['name']) for method in time_methods_labels_b], sym="", patch_artist=True, vert=False)
 
+
+
 # ax.set_ylim(0, 4000)
 ax.set_xlabel("Seconds per target")
 ax.set_xscale("log")
@@ -156,6 +160,7 @@ ax.set_xscale("log")
 for patch, color in zip(bplot['boxes'], time_colors_b):
     patch.set_facecolor(color)
 
+plt.grid(linestyle='--', linewidth=0.5)
 plt.tight_layout()
 plt.savefig('../data/cputime_binding.png'.format(), dpi=300)
 
