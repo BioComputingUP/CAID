@@ -4,11 +4,9 @@ import numpy as np
 import copy
 import argparse
 # relative imports
-from caid import parse_config, set_logger
-from bvaluation.evaluate import parse_args as parse_eval_args, bvaluation, build_output_basename
-from bvaluation.assessment.dataset import ReferencePool
-
-SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+from caid import set_logger
+from vectorized_metrics import bvaluation
+from baseline_random import get_reference
 
 
 def tokenize(seq, n=7):
@@ -36,6 +34,7 @@ def tokenize(seq, n=7):
     for pos in range(n, len(seq) - n):
         yield seq[pos - n:pos + n + 1]
 
+
 def get_scores_movingwindow(sequence):
     tokens = list(tokenize(sequence))
     return np.array(tokens).mean(axis=1)
@@ -54,20 +53,21 @@ def save_prediction(ref_file, acc, seq, scores, states):
         ref_file.write('{}\t{}\t{}\t{}\n'.format(i, aa, '{:.3f}'.format(sc) if isinstance(sc, float) else '', st))
 
 
-def naif_prediction(loaded_ref, outbase, invert):
+def naive_prediction(loaded_ref, outbase, invert):
     logging.info('building naif baseline from reverse input reference')
     fname = '{}.txt'.format(outbase)
 
 
     with open(fname, 'w') as fhandle:
-        for acc, data in loaded_ref.items():
+        for acc, data in loaded_ref.groupby(level=0):
             if invert is True:
-                states = [1 if r == 0 else 0 for r in data['states']]
+                states = [1 if r == 0 else 0 for r in data['ref']['states']]
             else:
-                states = [0 if r == 0 else 1 for r in data['states']]
+                states = [0 if r == 0 else 1 for r in data['ref']['states']]
+
             scores = get_scores_movingwindow(states)
 
-            save_prediction(fhandle, acc, data['seq'], scores, states)
+            save_prediction(fhandle, acc, data['ref']['seq'], scores, states)
 
     return fname
 
@@ -83,23 +83,17 @@ def build_args(options, predfiles, output_basename):
     return optns
 
 
-def parse_args(wd):
+def parse_args():
     parser = argparse.ArgumentParser(
         prog='caid-assess', description="CAID: Critical Assessment of Intrinsic Disorder",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('reference',
                         help='reference file to which predictions are to be compared')
-    parser.add_argument('-p', "--pRef", default=None, help='reference from which to derive naif predictions, if not set, reference argument will be used')
+    parser.add_argument("--pRef", help='reference from which to derive naif predictions')
 
-    parser.add_argument('-r', '--replaceUndefined', choices=['0', '1'], default=None,
-                        help='replace value for undefined positions (-) in reference. '
-                             'By default not applied')
     parser.add_argument('-i', '--invert', default=False, action='store_true')
     parser.add_argument('-o', '--outdir', default='.')
-    parser.add_argument('-c', '--conf', type=str,
-                        default=os.path.join(wd, 'config.ini'),
-                        help="path to an alternative configuration file.")
 
     parser.add_argument('-l', '--log', type=str, default=None, help='log file')
     parser.add_argument("-ll", "--logLevel", default="ERROR",
@@ -111,23 +105,15 @@ def parse_args(wd):
 
 
 if __name__ == '__main__':
-    args = parse_args(SCRIPT_DIR)
-    conf = parse_config(args.conf)
+    args = parse_args()
     set_logger(args.log, args.logLevel)
 
-    ref = ReferencePool(os.path.abspath(args.reference),
-                        undefined_replace_value=args.replaceUndefined)
+    ref, refname = get_reference(args.reference)
+    pred, predname = get_reference(args.pRef)
 
-    if args.pRef is not None:
-        suffix = 'naive-{}'.format(os.path.basename(os.path.splitext(args.pRef)[0]))
-        pred = ReferencePool(os.path.abspath(args.pRef),
-                             undefined_replace_value=args.replaceUndefined)
-    else:
-        suffix = "naive-self"
-        pred = ref
+    predname = predname if refname != predname else "self"
 
-    output_basename = build_output_basename(args.reference, args.outdir, ['b'], suffix=suffix)
-    pred_fname = naif_prediction(pred, output_basename, args.invert)
+    # basename = "-".join([refname, predname])
+    pred_fname = naive_prediction(pred, predname, args.invert)
 
-    bvaluation(reference=args.reference, prediction=[pred_fname], outdir=args.outdir, suffix=suffix,
-               replace_undefined=args.replaceUndefined, log=args.log, log_level=args.logLevel)
+    bvaluation(reference=args.reference, predictions=[pred_fname], outpath=args.outdir, run_tag="naive-{}".format(predname))

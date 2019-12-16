@@ -2,16 +2,16 @@ import os
 import logging
 import numpy as np
 import argparse
+from pathlib import Path
 # relative imports
-from caid import parse_config, set_logger
-from bvaluation.evaluate import parse_args as parse_eval_args, bvaluation, build_output_basename
-from bvaluation.assessment.dataset import ReferencePool
+from caid import set_logger
+from vectorized_metrics import bvaluation
+from baseline_random import get_reference
 
-SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
 PSEUDOCOUNT = .0000001
 
-blosum62_freqs = {'S': 0.059, 'F': 0.044, 'V': 0.072, 'R': 0.051, 'K': 0.056, 'A': 0.078,
+BLOSUM62_FREQS = {'S': 0.059, 'F': 0.044, 'V': 0.072, 'R': 0.051, 'K': 0.056, 'A': 0.078,
                   'G': 0.083, 'N': 0.041, 'M': 0.024, 'E': 0.059, 'D': 0.052, 'C': 0.024,
                   'Q': 0.034, 'H': 0.025, 'P': 0.043, 'Y': 0.034, 'W': 0.014, 'T': 0.055,
                   'I': 0.062, 'L': 0.092}
@@ -43,15 +43,15 @@ def js_divergence(freqs, bg_distr):
     return distance
 
 
-def conservation_based_prediction(loaded_ref, outbase, background_freqs):
+def conservation_based_prediction(loaded_ref, pssm_dir, background_freqs, outfile="cons.txt"):
     logging.info('building baseline distance from blosum62 frequencies')
-    fname = '{}_cons.txt'.format(outbase)
 
-    with open(fname, 'w') as fhandle:
-        for acc, data in loaded_ref.items():
+    with open(outfile, 'w') as fhandle:
+        for acc, data in loaded_ref.groupby(level=0):
             scores = list()
             with open(os.path.join(pssm_dir, '{}.fasta'.format(acc))) as asn:
                 prior_freqs = None
+
                 for line in asn:
                     line = line.strip().split()
                     ll = len(line)
@@ -68,36 +68,19 @@ def conservation_based_prediction(loaded_ref, outbase, background_freqs):
                         js_div = js_divergence(freqs, prior_freqs)
                         scores.append(1 - js_div)
                 states = [1 if js >= 0.4 else 0 for js in scores]
-            save_prediction(fhandle, acc, data['seq'], scores, states)
-    return fname
+            save_prediction(fhandle, acc, data['ref']['seq'], scores, states)
+    return outfile
 
 
-def build_args(options, predfiles, output_basename):
-    optns = [options.reference] + predfiles + ['-l', options.log,
-                                               '-ll', options.logLevel,
-                                               '-o', output_basename,
-                                               '--suffix', 'cons']
-    if options.replaceUndefined is not None:
-        optns.extend(['-r', options.replaceUndefined])
-
-    return optns
-
-
-def parse_args(wd):
-    parser = argparse.ArgumentParser(
-        prog='caid-assess', description="CAID: Critical Assessment of Intrinsic Disorder",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+def parse_args():
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('reference',
                         help='reference file to which predictions are to be compared')
+    parser.add_argument('pssmdir',
+                        help="directory containing pssm files for each target in reference")
 
-    parser.add_argument('-r', '--replaceUndefined', choices=['0', '1'], default=None,
-                        help='replace value for undefined positions (-) in reference. '
-                             'By default not applied')
     parser.add_argument('-o', '--outdir', default='.')
-    parser.add_argument('-c', '--conf', type=str,
-                        default=os.path.join(wd, 'config.ini'),
-                        help="path to an alternative configuration file.")
 
     parser.add_argument('-l', '--log', type=str, default=None, help='log file')
     parser.add_argument("-ll", "--logLevel", default="ERROR",
@@ -109,17 +92,9 @@ def parse_args(wd):
 
 
 if __name__ == '__main__':
-    args = parse_args(SCRIPT_DIR)
-    conf = parse_config(args.conf)
+    args = parse_args()
     set_logger(args.log, args.logLevel)
-    pssm_dir = dict(conf.items('data_directories'))['pssm']
 
-    ref = ReferencePool(os.path.abspath(args.reference),
-                        undefined_replace_value=args.replaceUndefined)
-
-    output_basename = build_output_basename(args.reference,
-                                            args.outdir, ['b'])
-
-    pred_fname = conservation_based_prediction(ref, output_basename, blosum62_freqs)
-    bvaluation(reference=args.reference, prediction=[pred_fname], outdir=args.outdir, suffix='cons',
-               replace_undefined=args.replaceUndefined, log=args.log, log_level=args.logLevel)
+    ref, refname = get_reference(args.reference)
+    pred_fname = conservation_based_prediction(ref, args.pssmdir, BLOSUM62_FREQS,  Path(args.outdir) / "{}_cons.txt".format(refname))
+    bvaluation(reference=args.reference, predictions=[pred_fname], outpath=args.outdir, run_tag="cons")
