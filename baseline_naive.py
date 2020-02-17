@@ -3,6 +3,7 @@ import logging
 import numpy as np
 import copy
 import argparse
+from pathlib import Path
 # relative imports
 from caid import set_logger
 from vectorized_metrics import bvaluation
@@ -54,9 +55,8 @@ def save_prediction(ref_file, acc, seq, scores, states):
 
 
 def naive_prediction(loaded_ref, outbase, invert):
-    logging.info('building naif baseline from reverse input reference')
+    logging.info('building naive baseline from reverse input reference')
     fname = '{}.txt'.format(outbase)
-
 
     with open(fname, 'w') as fhandle:
         for acc, data in loaded_ref.groupby(level=0):
@@ -90,7 +90,7 @@ def parse_args():
 
     parser.add_argument('reference',
                         help='reference file to which predictions are to be compared')
-    parser.add_argument("--pRef", help='reference from which to derive naif predictions')
+    parser.add_argument("--pRef", help='reference from which to derive naif predictions', required=True)
 
     parser.add_argument('-i', '--invert', default=False, action='store_true')
     parser.add_argument('-o', '--outdir', default='.')
@@ -113,7 +113,7 @@ if __name__ == '__main__':
 
     predname = predname if refname != predname else "self"
 
-    # basename = "-".join([refname, predname])
-    pred_fname = naive_prediction(pred, predname, args.invert)
+    pred_fname = naive_prediction(pred, Path(args.outdir) / predname, args.invert)
 
-    bvaluation(reference=args.reference, predictions=[pred_fname], outpath=args.outdir, run_tag="naive-{}".format(predname))
+    bvaluation(reference=args.reference, predictions=[pred_fname], outpath=args.outdir,
+               run_tag="naive-{}".format(predname), dataset=True, target=True, bootstrap=True)

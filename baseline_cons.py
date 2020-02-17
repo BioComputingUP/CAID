@@ -96,5 +96,8 @@ if __name__ == '__main__':
     set_logger(args.log, args.logLevel)
 
     ref, refname = get_reference(args.reference)
-    pred_fname = conservation_based_prediction(ref, args.pssmdir, BLOSUM62_FREQS,  Path(args.outdir) / "{}_cons.txt".format(refname))
-    bvaluation(reference=args.reference, predictions=[pred_fname], outpath=args.outdir, run_tag="cons")
+    pred_fname = conservation_based_prediction(
+        ref, args.pssmdir, BLOSUM62_FREQS,
+                                               Path(args.outdir) / "{}_cons.txt".format(refname))
+    bvaluation(reference=args.reference, predictions=[pred_fname], outpath=args.outdir, run_tag="cons",
+               dataset=True, target=True, bootstrap=True)
