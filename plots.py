@@ -181,7 +181,8 @@ if __name__ == "__main__":
 
     # DON'T CHANGE THE ORDER
     basetypes = ["cons", "naive-new-pdb-r_simple", "naive-new-gene3d-r_simple",  # naive
-                 "random", "fixedposfrc", "shuffledataset", "shuffletargets"]   # random
+                 # "random", "fixedposfrc", "shuffledataset", "shuffletargets"]   # random
+                 "fixedposfrc"]
 
     plot_metrics_correlation(resultdir, outputdir)
     plot_metrics_clustermap(resultdir, outputdir)
