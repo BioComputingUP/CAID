@@ -19,6 +19,7 @@ def plot_pertarget_permethod_heatmap(metric, target_metrics_preds, outdir, outba
     ax2.tick_params(axis='x', rotation=90)
 
     plt.savefig(outdir / "{}tgtheatmap_{}.png".format(outbase + "_" if outbase else outbase, metric), dpi=DPI, bbox_inches="tight")
+    plt.close(fig)
 
 
 def plot_icontent_correlation(metric, predictions, cons, pdbr, gene3dr, outdir, outbase):
@@ -39,6 +40,7 @@ def plot_icontent_correlation(metric, predictions, cons, pdbr, gene3dr, outdir, 
         ax.set_xlabel(p)
 
     plt.savefig(outdir / "{}icontentcorr_{}.png".format(outbase + "_" if outbase else outbase, metric), dpi=DPI, bbox_inches="tight")
+    plt.close()
 
 
 def plot_methdod_correlation(metric, target_metrics_preds, outdir, outbase):
@@ -47,6 +49,7 @@ def plot_methdod_correlation(metric, target_metrics_preds, outdir, outbase):
     ax = sns.pairplot(t.T)
     plt.savefig(outdir / "{}methodcorr_{}.png".format(outbase + "_" if outbase else outbase, metric), dpi=DPI,
                 bbox_inches="tight")
+    plt.close()
 
 
 def plot_metrics_correlation(resdir, outdir):
