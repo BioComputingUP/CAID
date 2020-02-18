@@ -197,6 +197,9 @@ if __name__ == "__main__":
 
         reference = Path(reference)
         refname = reference.stem
+        
+        if refname in ["new-disprot-linker_pdb", "new-disprot-linker_gene3d"]:
+            continue
 
         roc_preds_f = resultdir / "{}.analysis.all.dataset._.roc.csv".format(refname)
         roc_preds = pd.read_csv(roc_preds_f, index_col=[0], header=[0, 1, 2])
