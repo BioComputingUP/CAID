@@ -6,6 +6,8 @@ from itertools import product
 from scipy.stats import ttest_ind, pearsonr
 import numpy as np
 import math
+import warnings
+warnings.filterwarnings("ignore")
 
 
 def plot_metric_to_threshold(metric, dataset_perthr_metric, outdir, outbase):
