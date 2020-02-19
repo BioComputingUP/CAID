@@ -198,7 +198,7 @@ if __name__ == "__main__":
         reference = Path(reference)
         refname = reference.stem
         
-        if refname in ["new-disprot-linker_pdb", "new-disprot-linker_gene3d"]:
+        if refname in ["new-disprot-linker_pdb", "new-disprot-linker_gene3d", "new-gene3d-r_simple", "new-pdb-r_simple"]:
             continue
 
         roc_preds_f = resultdir / "{}.analysis.all.dataset._.roc.csv".format(refname)
