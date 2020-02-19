@@ -12,7 +12,7 @@ warnings.filterwarnings("ignore")
 
 def plot_metric_to_threshold(metric, dataset_perthr_metric, outdir, outbase):
     s = math.ceil(len(dataset_perthr_metric.index)**.5)
-    dataset_perthr_metric.T.plot(subplots=True, layout=(s, s), figsize=(s*2.5, s*2.5), sharex=True, sharey=True)
+    dataset_perthr_metric.T.sort_index().plot(subplots=True, layout=(s, s), figsize=(s*2.5, s*2.5), sharex=True, sharey=True)
     plt.gcf().suptitle(metric)
     plt.savefig(outdir / "{}{}ToThr.png".format(outbase + "_" if outbase else outbase, metric), dpi=DPI, bbox_inches="tight")
     plt.close()
