@@ -8,6 +8,14 @@ import numpy as np
 import math
 
 
+def plot_metric_to_threshold(metric, dataset_perthr_metric, outdir, outbase):
+    s = math.ceil(len(dataset_perthr_metric.index)**.5)
+    dataset_perthr_metric.T.plot(subplots=True, layout=(s, s), figsize=(s*2.5, s*2.5), sharex=True, sharey=True)
+    plt.gcf().suptitle(metric)
+    plt.savefig(outdir / "{}{}ToThr.png".format(outbase + "_" if outbase else outbase, metric), dpi=DPI, bbox_inches="tight")
+    plt.close()
+
+
 def plot_pertarget_permethod_heatmap(metric, target_metrics_preds, outdir, outbase):
     fig, ax = plt.subplots(figsize=(20, 8))
     tgt_pred_metrics_avg = target_metrics_preds[metric].unstack().mean().sort_values()
@@ -187,8 +195,8 @@ if __name__ == "__main__":
                  # "random", "fixedposfrc", "shuffledataset", "shuffletargets"]   # random
                  "fixedposfrc"]
 
-    plot_metrics_correlation(resultdir, outputdir)
-    plot_metrics_clustermap(resultdir, outputdir)
+    # plot_metrics_correlation(resultdir, outputdir)
+    # plot_metrics_clustermap(resultdir, outputdir)
 
     # iterate over file in dir (foreach reference)
     for reference in refdir.glob("*.txt"):
@@ -209,12 +217,14 @@ if __name__ == "__main__":
         pr_preds = pd.read_csv(pr_preds_f, index_col=[0], header=[0, 1, 2, 3])
         pr_bases = [pd.read_csv(baselndir / "{}.{}.all.dataset._.pr.csv".format(refname, b), index_col=[0], header=[0, 1, 2, 3]) for b in basetypes[:3]]
 
-        plot_roc(roc_preds, roc_bases, outputdir, refname)
-        plot_pr(pr_preds, pr_bases, outputdir, refname, sortby="auc")
-        plot_pr(pr_preds, pr_bases, outputdir, refname, sortby="aps")
+        # plot_roc(roc_preds, roc_bases, outputdir, refname)
+        # plot_pr(pr_preds, pr_bases, outputdir, refname, sortby="auc")
+        # plot_pr(pr_preds, pr_bases, outputdir, refname, sortby="aps")
 
         dataset_metrics_default_f = resultdir / "{}.analysis.all.dataset.default.metrics.csv".format(refname)
         dataset_metrics_default = pd.read_csv(dataset_metrics_default_f, index_col=0)
+
+        dataset_metrics_single_preds = pd.concat([pd.read_csv(f, index_col=[0,1]) for f in resultdir.glob(Path(refname).stem+"*D*dataset*")], sort=False)
 
         for optimized_metric in list(dataset_metrics_default.columns) + ["default"]:
             if optimized_metric not in {"aucroc", "aucpr", "thr", "aps"}:
@@ -251,17 +261,18 @@ if __name__ == "__main__":
 
                 for metric_to_plot in list(dataset_metrics_default.columns):
                     if metric_to_plot not in {"aucroc", "aucpr", "thr", "aps"}:
-                        # pass
-                        plot_dataset_target_metric(metric_to_plot, dataset_metrics_preds, dataset_metrics_bases,
-                                                   target_metrics_preds, target_metrics_bases, bootstr_ci_preds, outputdir,
-                                                   "{}_opt{}".format(refname, optimized_metric))
+                        pass
+                        # plot_dataset_target_metric(metric_to_plot, dataset_metrics_preds, dataset_metrics_bases,
+                        #                            target_metrics_preds, target_metrics_bases, bootstr_ci_preds, outputdir,
+                        #                            "{}_opt{}".format(refname, optimized_metric))
                         #
-                        plot_pertarget_permethod_heatmap(metric_to_plot, target_metrics_preds,
-                                                         outputdir, "{}_opt{}".format(refname, optimized_metric))
+                        # plot_pertarget_permethod_heatmap(metric_to_plot, target_metrics_preds,
+                        #                                  outputdir, "{}_opt{}".format(refname, optimized_metric))
                         # plot_methdod_correlation(metric_to_plot, target_metrics_preds, outputdir, "{}_opt{}".format(refname, optimized_metric))
 
-                plot_average_overall_ranking(optimized_metric, dataset_metrics_preds, dataset_metrics_bases, outputdir, refname)
-                plot_icontent_correlation(optimized_metric, predictions, *naive_preds, outputdir, refname)
+                # plot_average_overall_ranking(optimized_metric, dataset_metrics_preds, dataset_metrics_bases, outputdir, refname)
+                # plot_icontent_correlation(optimized_metric, predictions, *naive_preds, outputdir, refname)
+                plot_metric_to_threshold(optimized_metric, dataset_metrics_single_preds.xs(optimized_metric, level=1), outputdir, refname)
 
     # for body end
 
