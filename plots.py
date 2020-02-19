@@ -274,7 +274,8 @@ if __name__ == "__main__":
 
                 # plot_average_overall_ranking(optimized_metric, dataset_metrics_preds, dataset_metrics_bases, outputdir, refname)
                 # plot_icontent_correlation(optimized_metric, predictions, *naive_preds, outputdir, refname)
-                plot_metric_to_threshold(optimized_metric, dataset_metrics_single_preds.xs(optimized_metric, level=1), outputdir, refname)
+                if optimized_metric != "default":
+                    plot_metric_to_threshold(optimized_metric, dataset_metrics_single_preds.xs(optimized_metric, level=1), outputdir, refname)
 
     # for body end
 
