@@ -859,7 +859,7 @@ logging.info("old proteins %i", len(old_prot))
 # get_identical_regions(prot, "../data/curated_entries/same_regions_problems.txt")
 
 # Seqeunces for CAID predictors
-# write_fasta(prot, "../data/curated_entries/sequences_all.fasta")
+write_fasta(prot, "../data/sequences_all.fasta")
 
 # Dataset for Patrick
 # write_sentences(prot, '../data/sentences.txt')
@@ -877,11 +877,11 @@ reference_names = ['disprot-all',
                    'disprot-linker',
                    'disprot-binding', 'pdb-missing']
 
-reference_names_pdb = list(map(lambda s: s + '_pdb', reference_names))
-reference_names_gene3d = list(map(lambda s: s + '_gene3d', reference_names))
-reference_names_gene3d_reverse = list(map(lambda s: s + '_gene3d', reference_names))
-reference_names_simple = list(map(lambda s: s + '_simple', reference_names))
-reference_names_counted = list(map(lambda s: s + '_evidence-num', reference_names))
+# reference_names_pdb = list(map(lambda s: s + '_pdb', reference_names))
+# reference_names_gene3d = list(map(lambda s: s + '_gene3d', reference_names))
+# reference_names_gene3d_reverse = list(map(lambda s: s + '_gene3d', reference_names))
+# reference_names_simple = list(map(lambda s: s + '_simple', reference_names))
+# reference_names_counted = list(map(lambda s: s + '_evidence-num', reference_names))
 
 # write_caid_references_simple(new_prot, '../data/disorder', 'new', reference_names_simple)
 # write_caid_references_simple(old_prot, '../data/disorder', 'old', reference_names_simple)
@@ -895,15 +895,15 @@ reference_names_counted = list(map(lambda s: s + '_evidence-num', reference_name
 # # write_caid_references_simpleevidencenum(new_prot, '../data/disorder', 'new', ['disprot-all_simple-evidence-num'])
 # # write_fess_reference(new_prot, '../data/disorder', 'new', ['fess'])  # require fess
 
-with open("../data/disorder_content.csv", "w") as fout:
-    fout.write("name,total_proteins,total_residues,res_pos,res_neg,res_mask,reg_pos,reg_neg,reg_mask,reg_long_pos,reg_long_neg,reg_long_mask\n")
-
-    for k in ['new', 'old']:
-        for ele in [reference_names_pdb, reference_names_simple]:
-            for label in ele:
-                name = "{}-{}".format(k, label)
-
-                fout.write("{},{}\n".format(name, caid_reference_stats('../data/disorder', name)))
+# with open("../data/disorder_content.csv", "w") as fout:
+#     fout.write("name,total_proteins,total_residues,res_pos,res_neg,res_mask,reg_pos,reg_neg,reg_mask,reg_long_pos,reg_long_neg,reg_long_mask\n")
+#
+#     for k in ['new', 'old']:
+#         for ele in [reference_names_pdb, reference_names_simple]:
+#             for label in ele:
+#                 name = "{}-{}".format(k, label)
+#
+#                 fout.write("{},{}\n".format(name, caid_reference_stats('../data/disorder', name)))
 
 
 

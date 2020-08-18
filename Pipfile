@@ -15,6 +15,9 @@ pandas = "*"
 ipython = "*"
 jupyterlab = "*"
 pillow = "*"
+requests = "*"
+matplotlib-venn = "*"
+venn = "*"
 
 [requires]
 python_version = "3.6"

@@ -1,6 +1,6 @@
 datasets/*.log
 datasets/*.png
-data/
+*/ipynb_checkpoints
 
 
 # Created by .ignore support plugin (hsz.mobi)

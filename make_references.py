@@ -125,7 +125,7 @@ if __name__ == "__main__":
                         outfile=outdir / 'disprot-disorder-{}.txt'.format(Path(negative).stem), negatives=negative)
 
         build_reference(disprot_ann, pool=args.disorder, positives=negative, excluded=args.exclude,
-                        label_map={'-': '0', 'S': '1'},
+                        label_map={'-': '1', 'S': '0'},
                         outfile=outdir / '{}-reverse.txt'.format(Path(negative).stem))
 
     build_reference(disprot_ann, pool=args.interaction, positives=args.interaction, excluded=args.exclude,

@@ -60,13 +60,14 @@ def naive_prediction(loaded_ref, outbase, invert):
 
     with open(fname, 'w') as fhandle:
         for acc, data in loaded_ref.groupby(level=0):
+
             if invert is True:
                 states = [1 if r == 0 else 0 for r in data['ref']['states']]
             else:
                 states = [0 if r == 0 else 1 for r in data['ref']['states']]
 
-            scores = get_scores_movingwindow(states)
-
+            # scores = get_scores_movingwindow(states)
+            scores = [''] * len(states)
             save_prediction(fhandle, acc, data['ref']['seq'], scores, states)
 
     return fname

@@ -24,10 +24,9 @@ def parse_args():
 
 if __name__ == '__main__':
     args = parse_args()
-    #TODO: use refname to build output name
     set_logger(args.log, args.logLevel)
     ref, refname = baseline_random.get_reference(args.reference)
-    # baseline_random.baseline_random(ref, n=100, basename=refname, outpath=args.outdir, target=True)
+    baseline_random.baseline_random(ref, n=100, basename=refname, outpath=args.outdir, target=True)
     baseline_random.baseline_shuffle_dataset(ref, n=100, basename=refname, outpath=args.outdir, target=True)
     baseline_random.baseline_shuffle_targets(ref, n=100, basename=refname, outpath=args.outdir, target=True)
-    # baseline_random.baseline_fixed_positive_fraction(ref, 0.354, n=100, basename=refname, outpath=args.outdir, target=True)  # id content in DisProt 7.0 dataset
+    baseline_random.baseline_fixed_positive_fraction(ref, 0.354, n=100, basename=refname, outpath=args.outdir, target=True)  # id content in DisProt 7.0 dataset
