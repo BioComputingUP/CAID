@@ -1,5 +1,5 @@
 CAID relies on vectorized_cls_metrics library.
-At the moment this library needs to be cloned and manually added to the PYTHONPATH environmental variable. I plan to
+At the moment this library needs to be cloned from (https://github.com/marnec/vectorized_cls_metrics) and manually added to the PYTHONPATH environmental variable. I plan to
 publish it in pip in the future.
 
 disprot-2018-11-disorder.fasta obtained from:
