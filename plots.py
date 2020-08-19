@@ -639,8 +639,8 @@ if __name__ == "__main__":
                  # "fixedposfrc",
                  "random", "shuffledataset", "shuffletargets"]   # random
 
-    # plot_metrics_correlation(resultdir, outputdir)
-    # plot_metrics_clustermap(resultdir, outputdir)
+    plot_metrics_correlation(resultdir, outputdir)
+    plot_metrics_clustermap(resultdir, outputdir)
 
     cons_nvn = pd.read_csv(datadir / "blast_distribution_new_vs_new.txt", index_col=0)
     cons_nvo = pd.read_csv(datadir / "blast_distribution_new_vs_old.txt", index_col=0)
@@ -648,10 +648,10 @@ if __name__ == "__main__":
     counts = pd.read_csv(datadir / "reference.csv", index_col=[0, 1], header=[0, 1, 2])
     refstats_target = pd.read_csv('../data/dataset_stats/references-stats.target.csv', index_col=[0, 1], header=[0, 1])
 
-    # plot_subset_redundancy(cons_nvn, cons_nvo, outputdir)
-    # plot_dataset_redundancy(cons_tot, outputdir)
-    # plot_dataset_counts(counts, outputdir)
-    # plot_species_count(refstats_target, outputdir)
+    plot_subset_redundancy(cons_nvn, cons_nvo, outputdir)
+    plot_dataset_redundancy(cons_tot, outputdir)
+    plot_dataset_counts(counts, outputdir)
+    plot_species_count(refstats_target, outputdir)
 
     # iterate over file in dir (foreach reference)
     for reference in refdir.glob(args.glob):
@@ -677,12 +677,12 @@ if __name__ == "__main__":
         pr_random_bases = [pd.read_csv('../baseline/{}.{}.all.target.mcc.metrics.csv'.format(refname, b), index_col=0)
                             for b in basetypes[3:]]
 
-        # plot_roc(roc_preds, cons_roc, *roc_bases, roc_random_bases, outputdir, refname, names=get_names)
+        plot_roc(roc_preds, cons_roc, *roc_bases, roc_random_bases, outputdir, refname, names=get_names)
         coverage = pd.read_csv(resultdir / '{}.analysis.all.target.default.metrics.csv'.format(refname), index_col=[0,1], header=[0,1])
         coverage = (coverage.groupby(level=0).count().max(axis=1) / np.max(coverage.groupby(level=0).count().values))
-        # plot_pr(pr_preds, cons_pr, *pr_bases, pr_random_bases, coverage, outputdir, refname, sortby="auc", names=get_names)
-        # plot_pr(pr_preds, cons_pr, *pr_bases, pr_random_bases, coverage, outputdir, refname, sortby="aps", names=get_names)
-        # plot_pr(pr_preds, cons_pr, *pr_bases, pr_random_bases, coverage, outputdir, refname, sortby="fmax", names=get_names)
+        plot_pr(pr_preds, cons_pr, *pr_bases, pr_random_bases, coverage, outputdir, refname, sortby="auc", names=get_names)
+        plot_pr(pr_preds, cons_pr, *pr_bases, pr_random_bases, coverage, outputdir, refname, sortby="aps", names=get_names)
+        plot_pr(pr_preds, cons_pr, *pr_bases, pr_random_bases, coverage, outputdir, refname, sortby="fmax", names=get_names)
 
         dataset_metrics_default_f = resultdir / "{}.analysis.all.dataset.default.metrics.csv".format(refname)
         dataset_metrics_default = pd.read_csv(dataset_metrics_default_f, index_col=0)
@@ -724,37 +724,33 @@ if __name__ == "__main__":
 
                 for metric_to_plot in list(dataset_metrics_default.columns):
                     if metric_to_plot not in {"aucroc", "aucpr", "thr", "aps"}:
-                        pass
-                        # plot_dataset_target_metric(metric_to_plot, dataset_metrics_preds, dataset_metrics_bases,
-                        #                            target_metrics_preds, target_metrics_bases, bootstr_ci_preds, outputdir,
-                        #                            "{}_opt{}".format(refname, optimized_metric), names=get_names)
+                        plot_dataset_target_metric(metric_to_plot, dataset_metrics_preds, dataset_metrics_bases,
+                                                   target_metrics_preds, target_metrics_bases, bootstr_ci_preds, outputdir,
+                                                   "{}_opt{}".format(refname, optimized_metric), names=get_names)
 
                         plot_dat_tgt_metric_cpuspeed(metric_to_plot, dataset_metrics_preds, dataset_metrics_bases,
                                                    target_metrics_preds, target_metrics_bases, bootstr_ci_preds, outputdir,
                                                    "{}_opt{}".format(refname, optimized_metric), names=get_names)
 
-                        # plot_pertarget_permethod_heatmap(metric_to_plot, target_metrics_preds, target_metrics_bases,
-                        #                                  outputdir, "{}_opt{}".format(refname, optimized_metric), names=get_names)
-                        # plot_methdod_correlation(metric_to_plot, target_metrics_preds, outputdir, "{}_opt{}".format(refname, optimized_metric))
+                        plot_pertarget_permethod_heatmap(metric_to_plot, target_metrics_preds, target_metrics_bases,
+                                                         outputdir, "{}_opt{}".format(refname, optimized_metric), names=get_names)
+                        plot_methdod_correlation(metric_to_plot, target_metrics_preds, outputdir, "{}_opt{}".format(refname, optimized_metric))
 
-                # plot_average_overall_ranking(optimized_metric, target_metrics_preds, target_metrics_bases, outputdir, refname, names=get_names, level='target')
-                # plot_average_overall_ranking(optimized_metric, dataset_metrics_preds, dataset_metric
-                # s_bases,
-                #                                  outputdir, refname, names=get_names, level='dataset')
-                # plot_average_overall_ranking(optimized_metric, target_metrics_preds, target_metrics_bases, outputdir, refname, plotfirst=10, names=get_names, level='target')
-                # plot_average_overall_ranking(optimized_metric, dataset_metrics_preds, dataset_metrics_bases, outputdir, refname, plotfirst=10, names=get_names, level='dataset')
-                # plot_icontent_correlation(optimized_metric, predictions, *naive_preds, outputdir, refname, names=get_names)
+                plot_average_overall_ranking(optimized_metric, target_metrics_preds, target_metrics_bases, outputdir, refname, names=get_names, level='target')
+                plot_average_overall_ranking(optimized_metric, dataset_metrics_preds, dataset_metrics_bases,
+                                                 outputdir, refname, names=get_names, level='dataset')
+                plot_average_overall_ranking(optimized_metric, target_metrics_preds, target_metrics_bases, outputdir, refname, plotfirst=10, names=get_names, level='target')
+                plot_average_overall_ranking(optimized_metric, dataset_metrics_preds, dataset_metrics_bases, outputdir, refname, plotfirst=10, names=get_names, level='dataset')
+                plot_icontent_correlation(optimized_metric, predictions, *naive_preds, outputdir, refname, names=get_names)
 
                 if optimized_metric == 'f1s':
-                    pass
-                    # plot_cputime_to_performance('f1s', target_metrics_preds, outputdir, refname, names=get_names)
+                    plot_cputime_to_performance('f1s', target_metrics_preds, outputdir, refname, names=get_names)
 
                 if optimized_metric != "default":
-                    pass
-                    # plot_metric_to_threshold(optimized_metric,
-                    #                          dataset_metrics_single_preds,
-                    #                          dataset_metrics_default["thr"].round(3),
-                    #                          dataset_metrics_preds["thr"].round(3),
-                    #                          outputdir, refname, names=get_names)
+                    plot_metric_to_threshold(optimized_metric,
+                                             dataset_metrics_single_preds,
+                                             dataset_metrics_default["thr"].round(3),
+                                             dataset_metrics_preds["thr"].round(3),
+                                             outputdir, refname, names=get_names)
 
 

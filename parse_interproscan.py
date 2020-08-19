@@ -1,10 +1,10 @@
-
 """
-
 InterProScan (5.38-76.0) output generated with the following command:
 interproscan.sh -f tsv -dp -iprlookup -T /tmp/ -i caid.fasta -o caid_interproscan -T /tmp/
+python parse_interproscan.py ../data/annotations/disprot-2018-11-disorder.fasta ../data/annotations/disprot-2018-11.json caid_interproscan  > ../data/annotations/data/gene3d.fasta
 """
 
+import argparse
 import logging.config
 import json
 
@@ -32,16 +32,11 @@ def gen_block(f):
         yield (old_name, chunk)
 
 
-if __name__ == "__main__":
-
-    # Set logging
-    logging.basicConfig(format='%(asctime)s - %(process)d - %(name)s - %(message)s',
-                        level=logging.getLevelName("INFO"))
-
+def parse_interproscan(disprot_fasta, disprot_json, interproscan):
     logging.info("parse_interproscan.py started")
 
     caid_fasta = {}
-    with open("data/caid.fasta") as f:
+    with open(disprot_fasta) as f:
         for line in f:
             if line[0] == ">":
                 name = line.split()[0][1:]
@@ -50,7 +45,7 @@ if __name__ == "__main__":
 
     # The JSON as downloaded from DisProt
     caid_obj = {}
-    with open("data/caid.json") as f:
+    with open(disprot_json) as f:
         for doc in json.load(f)["data"]:
             if doc["name"] != "Genome polyprotein":  # Filter virus "Genome polyproteins"
                 caid_obj[doc["disprot_id"]] = doc
@@ -61,7 +56,7 @@ if __name__ == "__main__":
             logging.warning("{} different sequence".format(disprot_id))
 
     # Print the gene3d merged regions
-    with open("data/caid_interproscan") as f:
+    with open(interproscan) as f:
         for n, lines in gen_block(f):
             if n in caid_obj:  # Filter virus "Genome polyproteins"
                 regions = []
@@ -77,6 +72,22 @@ if __name__ == "__main__":
 
                     print(">{} {}\n{}".format(n, caid_obj[n]["acc"], "".join(seq)))
 
-# python3 parse_interproscan.py > data/gene3d.fasta
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('disprotfasta', help='directory where CAID predictors results are saved')
+    parser.add_argument('disprotjson', help='directory where CAID predictors results are saved')
+    parser.add_argument('interproscan', help='directory where CAID predictors results are saved')
+
+    args = parser.parse_args()
+    return args
 
 
+if __name__ == "__main__":
+    args = parse_args()
+    # Set logging
+    logging.basicConfig(format='%(asctime)s - %(process)d - %(name)s - %(message)s',
+                        level=logging.getLevelName("INFO"))
+
+    parse_interproscan(args.disprotfasta, args.disprotjson, args.interproscan)

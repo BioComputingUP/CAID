@@ -1,9 +1,6 @@
 # module imports
 from pathlib import Path
-from inspect import getsourcefile
 import logging
-import configparser
-import warnings
 import argparse
 # relative imports
 from vectorized_metrics import bvaluation
