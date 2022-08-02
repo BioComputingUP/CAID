@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-for fname in ../data/references/disorder/disprot*;
+
+for fname in ../data/references/*;
     do
       echo ${fname}
-      pipenv run python3 caid.py ${fname} ../data/predictions/disorder -ll INFO -o ../results
+      python3 caid.py ${fname} ../data/predictions -o ../results
       # pipenv run python3 baseline_naive.py ${fname} -o ../baseline --pRef ../data/references/disorder/pdb-atleast-reverse.txt -ll INFO;
       # pipenv run python3 baseline_naive.py ${fname} -o ../baseline --pRef ../data/references/disorder/gene3d-reverse.txt -ll INFO;
       # pipenv run python3 baseline_rand.py ${fname} -o ../baseline -ll INFO

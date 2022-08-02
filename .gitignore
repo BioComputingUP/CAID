@@ -1,0 +1,5 @@
+data/predictions/*
+data/references/*
+data/annotations/*
+results/*
+plots/*
