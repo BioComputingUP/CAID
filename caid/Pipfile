@@ -1,0 +1,26 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+
+[packages]
+ipykernel = "*"
+numpy = "*"
+matplotlib = "*"
+scikit-learn = "*"
+seaborn = "*"
+pandas = "*"
+ipython = "*"
+jupyterlab = "*"
+pillow = "*"
+requests = "*"
+matplotlib-venn = "*"
+venn = "*"
+
+[requires]
+python_version = "3.6"
+
+[pipenv]
+allow_prereleases = true
