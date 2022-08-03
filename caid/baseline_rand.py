@@ -1,7 +1,7 @@
 import argparse
 
 # relative imports
-import baseline_random
+from vectorized_metrics import baseline_random
 from caid import set_logger
 
 

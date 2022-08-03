@@ -1,18 +1,19 @@
-import json
-import math
-import logging
-import sys
-import matplotlib.ticker as ticker
-import warnings
 import argparse
+import json
+import logging
+import math
+import sys
+import warnings
+from itertools import product
+from multiprocessing import Pool, cpu_count
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from pathlib import Path
-from itertools import product
-import matplotlib.pyplot as plt
-from scipy.stats import ttest_ind, pearsonr, hmean
-from tqdm import tqdm
+from scipy.stats import hmean, pearsonr, ttest_ind
 
 warnings.filterwarnings("ignore")
 
@@ -24,9 +25,8 @@ def plot_metric_to_threshold(metric, dataset_perthr_metric, default_thr, opt_thr
         default_thr.rename(names, inplace=True)
         opt_threshold.rename(names, inplace=True)
 
-
-    s = math.ceil(len(dataset_perthr_metric)**.5)
-    fig, axes = plt.subplots(s, s, sharex=True, sharey=True, figsize=(s*2.5, s*2.5))
+    s = math.ceil(len(dataset_perthr_metric) ** .5)
+    fig, axes = plt.subplots(s, s, sharex=True, sharey=True, figsize=(s * 2.5, s * 2.5))
 
     def df_sorter(df):
         if names is None:
@@ -46,22 +46,23 @@ def plot_metric_to_threshold(metric, dataset_perthr_metric, default_thr, opt_thr
         # dataset_perthr_metric.loc[p].sort_index().plot(ax=ax, legend=default_thr[p])
         if i == 0 or i % s == 0:
             ax.set_ylabel(metric.upper())
-        if i > s**2-s:
+        if i > s ** 2 - s:
             ax.set_xlabel("Thresholds")
 
         ax.set_title(method)
         ax.axvline(default_thr[method], linestyle="--", label="Default: {}".format(default_thr[method]), color="orange")
-        ax.axvline(opt_threshold[method], linestyle="--", label="Optimal: {}".format(opt_threshold[method]), color="deeppink")
+        ax.axvline(opt_threshold[method], linestyle="--", label="Optimal: {}".format(opt_threshold[method]),
+                   color="deeppink")
         ax.legend(*zip(*list(zip(*ax.get_legend_handles_labels()))[1:]))
 
-    for x in range(-1, -(s**2 - len(dataset_perthr_metric))-1, -1):
+    for x in range(-1, -(s ** 2 - len(dataset_perthr_metric)) - 1, -1):
         fig.delaxes(axes.ravel()[x])
 
     plt.gcf().suptitle("{} progress with threshold".format(metric.upper()), y=1.01)
     fig.tight_layout()
-    plt.savefig(outdir / "{}{}ToThr.png".format(outbase + "_" if outbase else outbase, metric), dpi=dpi, bbox_inches="tight")
+    plt.savefig(outdir / "{}{}ToThr.png".format(outbase + "_" if outbase else outbase, metric), dpi=dpi,
+                bbox_inches="tight")
     plt.close()
-
 
 
 def plot_pertarget_permethod_heatmap(metric, target_metrics_preds, target_metrics_bases, outdir, outbase, names=None):
@@ -77,21 +78,25 @@ def plot_pertarget_permethod_heatmap(metric, target_metrics_preds, target_metric
 
     tgt_pred_metrics_avg_row = tgt_metric.mean(axis=1).sort_values(ascending=False)
     ax.set_facecolor('royalblue')
-    ax = sns.heatmap(tgt_metric.reindex(tgt_pred_metrics_avg_col.index, axis=1).reindex(tgt_pred_metrics_avg_row.index), ax=ax)
+    ax = sns.heatmap(tgt_metric.reindex(tgt_pred_metrics_avg_col.index, axis=1).reindex(tgt_pred_metrics_avg_row.index),
+                     ax=ax)
     ax2 = ax.twiny()
     ax2.set_xticks(ax.xaxis.get_ticklocs())
-    ax2.set_xticklabels(tgt_pred_metrics_avg_col.values[[list(tgt_pred_metrics_avg_col.index).index(l.get_text()) for l in
-                                                     ax.xaxis.get_ticklabels()]].round(3))
+    ax2.set_xticklabels(
+            tgt_pred_metrics_avg_col.values[[list(tgt_pred_metrics_avg_col.index).index(l.get_text()) for l in
+                                             ax.xaxis.get_ticklabels()]].round(3))
     ax2.tick_params(axis='x', rotation=90)
 
-    plt.savefig(outdir / "{}tgtheatmap_{}.png".format(outbase + "_" if outbase else outbase, metric), dpi=dpi, bbox_inches="tight")
+    plt.savefig(outdir / "{}tgtheatmap_{}.png".format(outbase + "_" if outbase else outbase, metric), dpi=dpi,
+                bbox_inches="tight")
     plt.close(fig)
 
 
 def plot_icontent_correlation(metric, predictions, cons, pdbr, gene3dr, outdir, outbase, names=None):
     logging.info("Plotting idcontent correlation: {}; {}".format(metric, outbase))
 
-    predictions = pd.DataFrame({**predictions.to_dict(), **cons.to_dict(), **pdbr.to_dict(), **gene3dr.to_dict()}).dropna()
+    predictions = pd.DataFrame(
+            {**predictions.to_dict(), **cons.to_dict(), **pdbr.to_dict(), **gene3dr.to_dict()}).dropna()
     n = len(predictions.columns.get_level_values(0).unique())
     n = int(n ** .5) if (n ** .5) % 2 == 0 else int(math.ceil(n ** .5))
 
@@ -100,7 +105,7 @@ def plot_icontent_correlation(metric, predictions, cons, pdbr, gene3dr, outdir, 
 
     idcontent_ref = predictions.iloc[:, 0].groupby(level=0).mean()
 
-    fig, axes = plt.subplots(n, n, figsize=(int(n)*2.5, int(n)*2.5), sharey="row")
+    fig, axes = plt.subplots(n, n, figsize=(int(n) * 2.5, int(n) * 2.5), sharey="row")
     axes = axes.flatten()
     for ax, p in zip(axes, predictions.columns.get_level_values(0).unique()):
         x = predictions[(p, "states")].groupby(level=0).mean()
@@ -112,7 +117,8 @@ def plot_icontent_correlation(metric, predictions, cons, pdbr, gene3dr, outdir, 
         ax.set_xlabel(p)
     fig.tight_layout()
 
-    plt.savefig(outdir / "{}icontentcorr_{}.png".format(outbase + "_" if outbase else outbase, metric), dpi=dpi, bbox_inches="tight")
+    plt.savefig(outdir / "{}icontentcorr_{}.png".format(outbase + "_" if outbase else outbase, metric), dpi=dpi,
+                bbox_inches="tight")
     plt.close()
 
 
@@ -120,9 +126,10 @@ def plot_methdod_correlation(metric, target_metrics_preds, outdir, outbase):
     logging.info("Plotting methods correlation: {}; {}".format(metric, outbase))
 
     t = target_metrics_preds[metric].unstack().reindex(
-        target_metrics_preds[metric].groupby(level=0).mean().sort_values(ascending=False).index)
+            target_metrics_preds[metric].groupby(level=0).mean().sort_values(ascending=False).index)
     ax = sns.pairplot(t.T)
-    plt.savefig(outdir / "{}methodcorr_{}.png".format(outbase + "_" if outbase else outbase, metric), dpi=dpi, bbox_inches="tight")
+    plt.savefig(outdir / "{}methodcorr_{}.png".format(outbase + "_" if outbase else outbase, metric), dpi=dpi,
+                bbox_inches="tight")
     plt.close()
 
 
@@ -133,7 +140,7 @@ def plot_metrics_correlation(resdir, outdir):
 
     fig, ax = plt.subplots(figsize=(8, 8))
     sns.heatmap(anymetric.reindex(anymetric.corr().mean().sort_values().drop('thr').index, axis=1).corr(),
-                     cmap='Blues', cbar=False, annot=True, ax=ax)
+                cmap='Blues', cbar=False, annot=True, ax=ax)
 
     plt.savefig(outdir / "metrics_corr.png", dpi=dpi, bbox_inches="tight")
     plt.close()
@@ -148,13 +155,12 @@ def plot_metrics_clustermap(resdir, outdir):
     plt.close()
 
 
-def plot_average_overall_ranking(metric, metrics_preds, metrics_bases, outdir, outbase, plotfirst=None, names=None, level='target'):
+def plot_average_overall_ranking(metric, metrics_preds, metrics_bases, outdir, outbase, plotfirst=None, names=None,
+                                 level='target'):
     logging.info("Plotting ranking: {}".format(metric))
     if level == 'target':
         metrics_preds = metrics_preds.groupby(level=0).mean()
         metrics_bases = metrics_bases.groupby(level=0).mean()
-
-
 
     metrics_selection = ['bac', 'f1s', 'fpr', 'mcc', 'ppv', 'tpr', 'tnr']
 
@@ -184,7 +190,7 @@ def plot_average_overall_ranking(metric, metrics_preds, metrics_bases, outdir, o
                      cbar=False, center=0.1, vmin=0, vmax=0.2, edgecolor='w')
 
     plt.savefig(outdir / "{}ranking.{}_{}{}.png".format(outbase + "_" if outbase else outbase, level,
-                                                   metric, "_best{}".format(plotfirst) if plotfirst else ""),
+                                                        metric, "_best{}".format(plotfirst) if plotfirst else ""),
                 dpi=dpi, bbox_inches="tight")
     plt.close(fig)
 
@@ -197,7 +203,7 @@ def plot_cput_stacked_bars(ax, predictors, names=None):
     ax.errorbar(range(len(predictors)),
                 cputime.mean().unstack()[order].rename(names).reindex(predictors).sum(axis=1),
                 cputime.std().unstack()[order].rename(names).reindex(predictors).apply(
-                    lambda r: np.sqrt(np.sum(np.log(r) ** 2)) / len(r), axis=1),
+                        lambda r: np.sqrt(np.sum(np.log(r) ** 2)) / len(r), axis=1),
                 linewidth=0, elinewidth=2, c='k')
     ax.set_ylabel('$\log_{10}(Seconds)$')
     #     ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, p: '$10^{{{0}}}$'.format(int(x))))
@@ -221,7 +227,6 @@ def plot_cput_boxplot(ax, predictors, names):
             color='magenta', linestyle='None')
     ax.set_yscale('log')
 
-
     ax.set_ylabel('$\log_{10}(Seconds)$')
     # ax.text(-0.15, 1.05, plotlbl, transform=ax.transAxes, size=20, weight='bold')
     ax.set_xlabel(None)
@@ -230,7 +235,8 @@ def plot_cput_boxplot(ax, predictors, names):
     ax.set_ylim(0.5, 10 ** 4)
 
 
-def plot_dat_tgt_metric_cpuspeed(metric, dat_metr_preds, dat_metr_bases, tgt_metr_preds, tgt_metr_bases, bts_ci_preds, outdir, outbase="", names=None):
+def plot_dat_tgt_metric_cpuspeed(metric, dat_metr_preds, dat_metr_bases, tgt_metr_preds, tgt_metr_bases, bts_ci_preds,
+                                 outdir, outbase="", names=None):
     logging.info("Plotting metric barplot: {}, {}".format(metric, outbase))
     fig = plt.figure(figsize=(15, 6))
     gs = fig.add_gridspec(2, 2, height_ratios=[2, 1])
@@ -244,7 +250,7 @@ def plot_dat_tgt_metric_cpuspeed(metric, dat_metr_preds, dat_metr_bases, tgt_met
 
     # plot dataset metrics on left subplot
     dat_m = dat_metr_preds[metric].sort_values(ascending=False).append(
-        dat_metr_bases[metric].sort_values(ascending=False))
+            dat_metr_bases[metric].sort_values(ascending=False))
     yerr = bts_ci_preds.xs(metric, level=1)[["lo", 'hi']].reindex(dat_m.index)
     colors = ['silver'] * len(dat_metr_preds) + ['grey'] * len(dat_metr_bases)
 
@@ -265,10 +271,11 @@ def plot_dat_tgt_metric_cpuspeed(metric, dat_metr_preds, dat_metr_bases, tgt_met
     # plot target metrics on right subplot
     n = tgt_metr_preds.groupby(level=0).count().append(tgt_metr_bases.groupby(level=0).count())
     tgt_m = tgt_metr_preds.groupby(level=0).mean()[metric].sort_values(ascending=False).append(
-        tgt_metr_bases.groupby(level=0).mean()[metric].sort_values(ascending=False))
+            tgt_metr_bases.groupby(level=0).mean()[metric].sort_values(ascending=False))
     yerr = tgt_metr_preds.groupby(level=0).std()[metric].append(
-        tgt_metr_bases.groupby(level=0).std()[metric])[tgt_m.index] / n[metric]**0.5 / 2
-    colors = ['silver'] * len(tgt_metr_preds.groupby(level=0).mean()) + ['grey'] * len(tgt_metr_bases.groupby(level=0).mean())
+            tgt_metr_bases.groupby(level=0).std()[metric])[tgt_m.index] / n[metric] ** 0.5 / 2
+    colors = ['silver'] * len(tgt_metr_preds.groupby(level=0).mean()) + ['grey'] * len(
+            tgt_metr_bases.groupby(level=0).mean())
 
     if names is not None:
         tgt_m = tgt_m.rename(names)
@@ -282,11 +289,13 @@ def plot_dat_tgt_metric_cpuspeed(metric, dat_metr_preds, dat_metr_bases, tgt_met
     ax3.set_ylabel(metric.upper())
     ax3.set_xticks([])
 
-    plt.savefig(outdir / "{}bar_{}.png".format(outbase+"_" if outbase else outbase, metric), dpi=dpi, bbox_inches="tight")
+    plt.savefig(outdir / "{}bar_{}.png".format(outbase + "_" if outbase else outbase, metric), dpi=dpi,
+                bbox_inches="tight")
     plt.close(fig)
 
 
-def plot_dataset_target_metric(metric, dat_metr_preds, dat_metr_bases, tgt_metr_preds, tgt_metr_bases, bts_ci_preds, outdir, outbase="", names=None):
+def plot_dataset_target_metric(metric, dat_metr_preds, dat_metr_bases, tgt_metr_preds, tgt_metr_bases, bts_ci_preds,
+                               outdir, outbase="", names=None):
     logging.info("Plotting metric barplot: {}, {}".format(metric, outbase))
     fig, axes = plt.subplots(1, 2, figsize=(15, 6), sharey=True)
 
@@ -297,7 +306,7 @@ def plot_dataset_target_metric(metric, dat_metr_preds, dat_metr_bases, tgt_metr_
     # print('dat_metr_preds', dat_metr_preds.columns)
     # plot dataset metrics on left subplot
     dat_m = dat_metr_preds[metric].sort_values(ascending=False).append(
-        dat_metr_bases[metric].sort_values(ascending=False))
+            dat_metr_bases[metric].sort_values(ascending=False))
     yerr = bts_ci_preds.xs(metric, level=1)[["lo", 'hi']].reindex(dat_m.index)
     colors = ['silver'] * len(dat_metr_preds) + ['grey'] * len(dat_metr_bases)
 
@@ -314,10 +323,11 @@ def plot_dataset_target_metric(metric, dat_metr_preds, dat_metr_bases, tgt_metr_
     # plot target metrics on right subplot
     n = tgt_metr_preds.groupby(level=0).count().append(tgt_metr_bases.groupby(level=0).count())
     tgt_m = tgt_metr_preds.groupby(level=0).mean()[metric].sort_values(ascending=False).append(
-        tgt_metr_bases.groupby(level=0).mean()[metric].sort_values(ascending=False))
+            tgt_metr_bases.groupby(level=0).mean()[metric].sort_values(ascending=False))
     yerr = tgt_metr_preds.groupby(level=0).std()[metric].append(
-        tgt_metr_bases.groupby(level=0).std()[metric])[tgt_m.index] / n[metric]**0.5 / 2
-    colors = ['silver'] * len(tgt_metr_preds.groupby(level=0).mean()) + ['grey'] * len(tgt_metr_bases.groupby(level=0).mean())
+            tgt_metr_bases.groupby(level=0).std()[metric])[tgt_m.index] / n[metric] ** 0.5 / 2
+    colors = ['silver'] * len(tgt_metr_preds.groupby(level=0).mean()) + ['grey'] * len(
+            tgt_metr_bases.groupby(level=0).mean())
 
     if names is not None:
         tgt_m = tgt_m.rename(names)
@@ -329,8 +339,10 @@ def plot_dataset_target_metric(metric, dat_metr_preds, dat_metr_bases, tgt_metr_
     ax.set_title("Average target {}; Negatives: {}; Optimized on: {}".format(metric.upper(), negatives, optm.upper()))
     ax.set_ylabel(metric.upper())
 
-    plt.savefig(outdir / "{}bar_{}.png".format(outbase+"_" if outbase else outbase, metric), dpi=dpi, bbox_inches="tight")
+    plt.savefig(outdir / "{}bar_{}.png".format(outbase + "_" if outbase else outbase, metric), dpi=dpi,
+                bbox_inches="tight")
     plt.close(fig)
+
 
 def plot_roc(preds_rocs, cons_roc, pdb_roc, gene3d_roc, random_rocs, outdir, outbase, names=None):
     # procs, proc, groc, dataset, title, names = names, croc = None
@@ -348,10 +360,10 @@ def plot_roc(preds_rocs, cons_roc, pdb_roc, gene3d_roc, random_rocs, outdir, out
     # ax.plot(*cons_roc.dropna().T.values, label="Naive Conservation", color='silver', linewidth=2)
 
     # for n, m in zip([pdb_roc, gene3d_roc], ['o', 's']):
-        # idx = n.index.values - 0.5
-        # ax.plot(*n.iloc[idx[idx > 0].argmin()], marker=m, markeredgecolor='silver', markeredgewidth=2,
-                # markerfacecolor='w', markersize=10,
-                # c='w', label=names(n.columns.get_level_values(0)[0]))
+    # idx = n.index.values - 0.5
+    # ax.plot(*n.iloc[idx[idx > 0].argmin()], marker=m, markeredgecolor='silver', markeredgewidth=2,
+    # markerfacecolor='w', markersize=10,
+    # c='w', label=names(n.columns.get_level_values(0)[0]))
 
     for rr, m in zip(random_rocs, ['*', 'P', 'd']):
         ax.plot(*rr[['fpr', 'tpr']].mean(), marker=m, markeredgecolor='silver', markeredgewidth=2,
@@ -366,10 +378,9 @@ def plot_roc(preds_rocs, cons_roc, pdb_roc, gene3d_roc, random_rocs, outdir, out
     #            llabels],
     #           bbox_to_anchor=(0., -.37, 1., .102), loc='lower left', ncol=2, mode="expand", borderaxespad=0)
 
-
     ax.set_xlabel("FPR")
     ax.set_ylabel("TPR")
-    plt.savefig(outdir /"{}roc.png".format(outbase+"_" if outbase else outbase), dpi=dpi, bbox_inches="tight")
+    plt.savefig(outdir / "{}roc.png".format(outbase + "_" if outbase else outbase), dpi=dpi, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -379,7 +390,8 @@ def plot_pr(pred_prs, cons_prc, pdb_prc, gene3d_prc, random_prcs, cov, outdir, o
 
     auc_pr = sorted(pred_prs.columns.droplevel([2, 3]).unique(), key=lambda t: t[1], reverse=True)
     aps_pr = sorted(pred_prs.columns.droplevel([1, 3]).unique(), key=lambda t: t[1], reverse=True)
-    fmax_pr = sorted(((p, hmean(pred_prs[p].dropna().values, axis=1).max().round(2)) for p in pred_prs.columns.get_level_values(0).unique()),
+    fmax_pr = sorted(((p, hmean(pred_prs[p].dropna().values, axis=1).max().round(2)) for p in
+                      pred_prs.columns.get_level_values(0).unique()),
                      key=lambda t: t[1], reverse=True)
 
     sorter = None
@@ -396,15 +408,18 @@ def plot_pr(pred_prs, cons_prc, pdb_prc, gene3d_prc, random_prcs, cov, outdir, o
     # plot f-score level lines
     r = np.linspace(0, 1, 1000)
     fs = hmean(np.array(np.meshgrid(r, r)).T.reshape(-1, 2), axis=1).reshape(1000, 1000)
-    cs = plt.contour(r, r, fs, levels=np.linspace(0.1, 1, 10), colors='silver', alpha=0.7, linewidths=1, linestyles='--')
+    cs = plt.contour(r, r, fs, levels=np.linspace(0.1, 1, 10), colors='silver', alpha=0.7, linewidths=1,
+                     linestyles='--')
     ax.clabel(cs, inline=True, fmt='%.1f', fontsize=10, manual=[(l, l) for l in cs.levels[:-1]])
 
     # plot predictor lines and markers
     for p, z in zip(prcs.columns.get_level_values(0).unique()[:10], range(5, 55, 5)):
         fmax_idx = hmean(prcs[p].dropna().T).argmax()
-        lines = ax.plot(*prcs[p].dropna().T.values, label=p, zorder=55-z)
-        ax.plot(*prcs[p].dropna().T.values[:, fmax_idx], color='w', marker='o', markerfacecolor=lines[0].get_color(), markersize=10, zorder=55-z)
-        ax.plot(*prcs[p].dropna().T.values[:, fmax_idx], color='w', marker='o', markerfacecolor=lines[0].get_color(), zorder=55-z)
+        lines = ax.plot(*prcs[p].dropna().T.values, label=p, zorder=55 - z)
+        ax.plot(*prcs[p].dropna().T.values[:, fmax_idx], color='w', marker='o', markerfacecolor=lines[0].get_color(),
+                markersize=10, zorder=55 - z)
+        ax.plot(*prcs[p].dropna().T.values[:, fmax_idx], color='w', marker='o', markerfacecolor=lines[0].get_color(),
+                zorder=55 - z)
 
     # plot naive conservation
     # ax.plot(*cons_prc.dropna().T.values, label="Naive Conservation", color='k', linewidth=1, zorder=5)
@@ -412,11 +427,11 @@ def plot_pr(pred_prs, cons_prc, pdb_prc, gene3d_prc, random_prcs, cov, outdir, o
 
     # plot naives
     # for n, m in zip([pdb_prc, gene3d_prc], ['o', 's']):
-        # nname = n.columns.get_level_values(0)[0]
-        # cov[nname] = 1
-        # ax.plot(*n.loc[1.0], marker=m, markeredgecolor='k', markeredgewidth=1,
-                # markerfacecolor='w', markersize=8, zorder=60,
-                # c='w', label=names(nname))
+    # nname = n.columns.get_level_values(0)[0]
+    # cov[nname] = 1
+    # ax.plot(*n.loc[1.0], marker=m, markeredgecolor='k', markeredgewidth=1,
+    # markerfacecolor='w', markersize=8, zorder=60,
+    # c='w', label=names(nname))
 
     # plot randoms
     for rprc, m in zip(random_prcs, ['*', 'P', 'd']):
@@ -429,7 +444,7 @@ def plot_pr(pred_prs, cons_prc, pdb_prc, gene3d_prc, random_prcs, cov, outdir, o
     ax.legend()
     lhandles, llabels = ax.get_legend_handles_labels()
     # if cons_roc is not None:
-        # sorter.extend(cons_roc.rename(names, axis=1, level=0).columns.droplevel(2).unique().tolist())
+    # sorter.extend(cons_roc.rename(names, axis=1, level=0).columns.droplevel(2).unique().tolist())
     pwauc = next(zip(*sorter))
     # ax.legend(lhandles,
     #           ['{}'.format('{} - {}: {}, C: {:.2f}'.format(names(l), sortby.upper(), sorter[pwauc.index(l)][1], cov[l]) if l in pwauc else l) for l in llabels],
@@ -442,6 +457,7 @@ def plot_pr(pred_prs, cons_prc, pdb_prc, gene3d_prc, random_prcs, cov, outdir, o
     fig.tight_layout()
     plt.savefig(outdir / "{}pr.{}.png".format(outbase + "_" if outbase else outbase, sortby), dpi=dpi, bbox_inches="tight")
     plt.close(fig)
+
 
 def plot_cputime_to_performance(metric, tgt_pred_metrics, outdir, outbase, names=None):
     logging.info('plotting cputime to {}'.format(metric))
@@ -483,8 +499,8 @@ def plot_cputime_to_performance(metric, tgt_pred_metrics, outdir, outbase, names
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        prog='caid-plots', description="automate plots for CAID analysis",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+            prog='caid-plots', description="automate plots for CAID analysis",
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('resultDir', help='directory where CAID predictors results are saved')
 
@@ -549,12 +565,12 @@ def plot_dataset_counts(counts, outdir):
     counts.loc["CAID"].drop("PDB missing").xs("Proteins", level=2, axis=1).plot.barh(ax=axes[0], legend=False)
     axes[0].set_title("CAID - Number of Proteins")
     counts.xs("Regions", level=1, axis=1).loc["CAID"].drop("PDB missing").drop(("PDB", "Positive"), axis=1).plot.barh(
-        ax=axes[1])
+            ax=axes[1])
     axes[1].legend(axes[1].get_legend().get_patches(), ["Postives", "Negatives (Simples)", "Negatives (PDB)"])
     axes[1].set_title("CAID - Number of Regions")
 
     counts.xs("Residues", level=1, axis=1).loc["CAID"].drop("PDB missing").drop(("PDB", "Positive"), axis=1).plot.barh(
-        ax=axes[2])
+            ax=axes[2])
     axes[2].legend(axes[2].get_legend().get_patches(), ["Postives", "Negatives (Simples)", "Negatives (PDB)"])
     axes[2].set_title("CAID - Number of Residues")
 
@@ -581,6 +597,7 @@ def plot_species_count(dst, outdir):
     plt.savefig(outdir / "species_counts.png", dpi=dpi, bbox_inches='tight')
     plt.close(plt.gcf())
 
+
 def get_names(fname):
     names = json.load(open(args.names))
 
@@ -604,14 +621,150 @@ def get_names(fname):
         elif "ref" in fname:
             name = "Reference"
     return name
-    
+
+
 dataset_names = {
-    'disprot-disorder': 'DisProt',
-    'disprot-disorder-pdb-atleast': 'DisProt-PDB',
-    'disprot-binding': 'DisProt-Binding',
-    'disprot-binding-all': 'DisProt-Binding-All',
-    'disprot-binding-disorder': 'DisProt-Binding-Disorder'
+        'disprot-disorder'            : 'DisProt',
+        'disprot-disorder-pdb-atleast': 'DisProt-PDB',
+        'disprot-binding'             : 'DisProt-Binding',
+        'disprot-binding-all'         : 'DisProt-Binding-All',
+        'disprot-binding-disorder'    : 'DisProt-Binding-Disorder'
 }
+
+
+def make_plots(reference):
+    logging.info(reference)
+
+    reference = Path(reference)
+    refname = reference.stem
+    logging.debug(refname)
+
+    roc_preds_f = resultdir / "{}.analysis.all.dataset._.roc.csv".format(refname)
+    roc_preds = pd.read_csv(roc_preds_f, index_col=[0], header=[0, 1, 2])
+    # old
+    # roc_bases = [pd.read_csv(baselndir / "{}.{}.all.dataset._.roc.csv".format(refname, b), index_col=[0],
+    #                          header=[0, 1, 2]) for b in basetypes[1:3]]
+    # new
+    # roc_bases = [pd.read_csv(baselndir / "{}.{}.all.dataset._.roc.csv".format(refname, b), index_col=[0],
+    #                          header=[0, 1, 2]) for b in basetypes]
+
+    # cons_roc = pd.read_csv(baselndir / '{}.cons.all.dataset._.roc.csv'.format(refname), index_col=[0], header=[0, 1, 2])
+    roc_random_bases = [pd.read_csv(baselndir / '{}.{}.all.target.mcc.metrics.csv'.format(refname, b), index_col=0) for
+                        b in basetypes]
+
+    pr_preds_f = resultdir / "{}.analysis.all.dataset._.pr.csv".format(refname)
+    pr_preds = pd.read_csv(pr_preds_f, index_col=[0], header=[0, 1, 2, 3])
+    # pr_bases = [pd.read_csv(baselndir / "{}.{}.all.dataset._.pr.csv".format(refname, b), index_col=[0],
+    #                         header=[0, 1, 2, 3]) for b in basetypes]
+    # cons_pr = pd.read_csv(baselndir / '{}.cons.all.dataset._.pr.csv'.format(refname), index_col=[0],
+    #                        header=[0, 1, 2, 3])
+    pr_random_bases = [pd.read_csv(baselndir / '{}.{}.all.target.mcc.metrics.csv'.format(refname, b), index_col=0)
+                       for b in basetypes]
+
+    plot_roc(roc_preds, None, None, None, roc_random_bases, outputdir, refname, names=get_names)
+    coverage = pd.read_csv(resultdir / '{}.analysis.all.target.default.metrics.csv'.format(refname), index_col=[0, 1],
+                           header=[0, 1])
+    coverage = (coverage.groupby(level=0).count().max(axis=1) / np.max(coverage.groupby(level=0).count().values))
+
+    # old
+    # plot_pr(pr_preds, cons_pr, *pr_bases, pr_random_bases, coverage, outputdir, refname, sortby="auc", names=get_names)
+    # plot_pr(pr_preds, cons_pr, *pr_bases, pr_random_bases, coverage, outputdir, refname, sortby="aps", names=get_names)
+    # plot_pr(pr_preds, cons_pr, *pr_bases, pr_random_bases, coverage, outputdir, refname, sortby="fmax", names=get_names)
+
+    # new
+    plot_pr(pr_preds, None, None, None, pr_random_bases, coverage, outputdir, refname, sortby="auc", names=get_names)
+    plot_pr(pr_preds, None, None, None, pr_random_bases, coverage, outputdir, refname, sortby="aps", names=get_names)
+    plot_pr(pr_preds, None, None, None, pr_random_bases, coverage, outputdir, refname, sortby="fmax", names=get_names)
+
+    dataset_metrics_default_f = resultdir / "{}.analysis.all.dataset.default.metrics.csv".format(refname)
+    dataset_metrics_default = pd.read_csv(dataset_metrics_default_f, index_col=0)
+
+    codestart = 'D' if 'disorder' in str(refdir) else 'B'
+    dataset_metrics_single_preds = [pd.read_csv(f, index_col=[0, 1]) for f in
+                                    resultdir.glob("{}.analysis.{}*dataset*".format(Path(refname).stem, codestart))]
+
+    # limited the numbers of metrics to plot
+    for optimized_metric in ["default"] + list(dataset_metrics_default.columns):
+        if optimized_metric not in {"aucroc", "aucpr", "thr", "aps"}:
+
+            predictions = pd.read_csv(resultdir / "{}.analysis.all.dataset._.predictions.csv".format(refname),
+                                      index_col=[0, 1], header=[0, 1])
+            # naive_preds = [pd.read_csv(baselndir / "{}.{}.all.dataset._.predictions.csv".format(refname, n), index_col=[0, 1], header=[0, 1]) for n in basetypes[:3]]
+
+            dataset_metrics_preds_f = resultdir / "{}.analysis.all.dataset.{}.metrics.csv".format(refname,
+                                                                                                  optimized_metric)
+            dataset_metrics_preds = pd.read_csv(dataset_metrics_preds_f, index_col=0)
+
+            bootstr_ci_preds_f = resultdir / "{}.analysis.all.ci.{}.metrics.csv".format(refname, optimized_metric)
+            bootstr_ci_preds = pd.read_csv(bootstr_ci_preds_f, index_col=[0, 1])
+            target_metrics_preds_f = resultdir / "{}.analysis.all.target.{}.metrics.csv".format(refname,
+                                                                                                optimized_metric)
+            target_metrics_preds = pd.read_csv(target_metrics_preds_f, index_col=[0, 1])
+
+            dataset_metrics_bases = []
+            target_metrics_bases = []
+            for bt in basetypes:
+                # if bt in basetypes[3:]:
+                if bt in basetypes:
+                    target_metrics_base_f = baselndir / "{}.{}.avg.target.{}.metrics.csv".format(refname, bt,
+                                                                                                 optimized_metric)
+                    target_metrics_bases.append(
+                            pd.read_csv(target_metrics_base_f, index_col=[0, 1], header=[0, 1]).xs('mean', level=1,
+                                                                                                   axis=1))
+                    dataset_metrics_base_f = baselndir / "{}.{}.avg.dataset.{}.metrics.csv".format(refname, bt,
+                                                                                                   optimized_metric)
+                    dataset_metrics_bases.append(
+                            pd.read_csv(dataset_metrics_base_f, index_col=0).loc["mean"].to_frame(bt).T)
+                else:
+                    target_metrics_base_f = baselndir / "{}.{}.all.target.{}.metrics.csv".format(refname, bt,
+                                                                                                 optimized_metric)
+                    target_metrics_bases.append(pd.read_csv(target_metrics_base_f, index_col=[0, 1]))
+                    dataset_metrics_base_f = baselndir / "{}.{}.all.dataset.{}.metrics.csv".format(refname, bt,
+                                                                                                   optimized_metric)
+                    dataset_metrics_bases.append(pd.read_csv(dataset_metrics_base_f, index_col=[0]))
+
+            # old
+            target_metrics_bases = pd.concat(target_metrics_bases)
+            dataset_metrics_bases = pd.concat(dataset_metrics_bases)
+
+            # target_metrics_bases = []
+            # dataset_metrics_bases = []
+
+            for metric_to_plot in ["f1s"]:
+                if metric_to_plot not in {"aucroc", "aucpr", "thr", "aps"}:
+                    plot_dataset_target_metric(metric_to_plot, dataset_metrics_preds, dataset_metrics_bases,
+                                               target_metrics_preds, target_metrics_bases, bootstr_ci_preds, outputdir,
+                                               "{}_opt{}".format(refname, optimized_metric), names=get_names)
+
+                    # plot_dat_tgt_metric_cpuspeed(metric_to_plot, dataset_metrics_preds, dataset_metrics_bases,
+                    #                            target_metrics_preds, target_metrics_bases, bootstr_ci_preds, outputdir,
+                    #                            "{}_opt{}".format(refname, optimized_metric), names=get_names)
+
+                    plot_pertarget_permethod_heatmap(metric_to_plot, target_metrics_preds, target_metrics_bases,
+                                                     outputdir, "{}_opt{}".format(refname, optimized_metric),
+                                                     names=get_names)
+                    plot_methdod_correlation(metric_to_plot, target_metrics_preds, outputdir,
+                                             "{}_opt{}".format(refname, optimized_metric))
+
+            plot_average_overall_ranking(optimized_metric, target_metrics_preds, target_metrics_bases, outputdir,
+                                         refname, names=get_names, level='target')
+            plot_average_overall_ranking(optimized_metric, dataset_metrics_preds, dataset_metrics_bases,
+                                         outputdir, refname, names=get_names, level='dataset')
+            plot_average_overall_ranking(optimized_metric, target_metrics_preds, target_metrics_bases, outputdir,
+                                         refname, plotfirst=10, names=get_names, level='target')
+            plot_average_overall_ranking(optimized_metric, dataset_metrics_preds, dataset_metrics_bases, outputdir,
+                                         refname, plotfirst=10, names=get_names, level='dataset')
+            # plot_icontent_correlation(optimized_metric, predictions, *naive_preds, outputdir, refname, names=get_names)
+
+            # if optimized_metric == 'f1s':
+            #     plot_cputime_to_performance('f1s', target_metrics_preds, outputdir, refname, names=get_names)
+
+            # if optimized_metric != "default":
+            #     plot_metric_to_threshold(optimized_metric,
+            #                              dataset_metrics_single_preds,
+            #                              dataset_metrics_default["thr"].round(3),
+            #                              dataset_metrics_preds["thr"].round(3),
+            #                              outputdir, refname, names=get_names)
 
 
 if __name__ == "__main__":
@@ -628,13 +781,12 @@ if __name__ == "__main__":
 
     get_names = get_names if args.names is not None else None
 
-
     # DON'T CHANGE THE ORDER
     # basetypes = ["cons", "naive-pdb-atleast-reverse", "naive-gene3d-reverse",   # naive
-                 # "fixedposfrc",
-                #  "random", "shuffledataset", "shuffletargets"]   # random
+    # "fixedposfrc",
+    #  "random", "shuffledataset", "shuffletargets"]   # random
 
-    basetypes = ["random", "shuffledataset", "shuffletargets"] # random baselines
+    basetypes = ["random", "shuffledataset", "shuffletargets"]  # random baselines
     # plot_metrics_correlation(resultdir, outputdir)
     # plot_metrics_clustermap(resultdir, outputdir)
 
@@ -650,120 +802,9 @@ if __name__ == "__main__":
     # plot_species_count(refstats_target, outputdir)
 
     # iterate over file in dir (foreach reference)
-    for reference in tqdm(refdir.glob(args.glob), desc="Plotting", total=len(list(refdir.glob(args.glob)))):
-        logging.info(reference)
 
-        reference = Path(reference)
-        refname = reference.stem
-        logging.debug(refname)
+    with Pool(processes=cpu_count()) as pool:
+        pool.map(make_plots, refdir.glob(args.glob))
 
-        roc_preds_f = resultdir / "{}.analysis.all.dataset._.roc.csv".format(refname)
-        roc_preds = pd.read_csv(roc_preds_f, index_col=[0], header=[0, 1, 2])
-        # old
-        # roc_bases = [pd.read_csv(baselndir / "{}.{}.all.dataset._.roc.csv".format(refname, b), index_col=[0],
-        #                          header=[0, 1, 2]) for b in basetypes[1:3]]
-        # new
-        # roc_bases = [pd.read_csv(baselndir / "{}.{}.all.dataset._.roc.csv".format(refname, b), index_col=[0],
-        #                          header=[0, 1, 2]) for b in basetypes]
-
-        # cons_roc = pd.read_csv(baselndir / '{}.cons.all.dataset._.roc.csv'.format(refname), index_col=[0], header=[0, 1, 2])
-        roc_random_bases = [pd.read_csv(baselndir / '{}.{}.all.target.mcc.metrics.csv'.format(refname, b), index_col=0) for b in basetypes]
-
-        pr_preds_f = resultdir / "{}.analysis.all.dataset._.pr.csv".format(refname)
-        pr_preds = pd.read_csv(pr_preds_f, index_col=[0], header=[0, 1, 2, 3])
-        # pr_bases = [pd.read_csv(baselndir / "{}.{}.all.dataset._.pr.csv".format(refname, b), index_col=[0],
-        #                         header=[0, 1, 2, 3]) for b in basetypes]
-        # cons_pr = pd.read_csv(baselndir / '{}.cons.all.dataset._.pr.csv'.format(refname), index_col=[0],
-        #                        header=[0, 1, 2, 3])
-        pr_random_bases = [pd.read_csv(baselndir / '{}.{}.all.target.mcc.metrics.csv'.format(refname, b), index_col=0)
-                            for b in basetypes]
-
-        plot_roc(roc_preds, None, None, None, roc_random_bases, outputdir, refname, names=get_names)
-        coverage = pd.read_csv(resultdir / '{}.analysis.all.target.default.metrics.csv'.format(refname), index_col=[0,1], header=[0,1])
-        coverage = (coverage.groupby(level=0).count().max(axis=1) / np.max(coverage.groupby(level=0).count().values))
-
-        # old
-        # plot_pr(pr_preds, cons_pr, *pr_bases, pr_random_bases, coverage, outputdir, refname, sortby="auc", names=get_names)
-        # plot_pr(pr_preds, cons_pr, *pr_bases, pr_random_bases, coverage, outputdir, refname, sortby="aps", names=get_names)
-        # plot_pr(pr_preds, cons_pr, *pr_bases, pr_random_bases, coverage, outputdir, refname, sortby="fmax", names=get_names)
-
-        # new
-        plot_pr(pr_preds, None, None, None, pr_random_bases, coverage, outputdir, refname, sortby="auc", names=get_names)
-        plot_pr(pr_preds, None, None, None, pr_random_bases, coverage, outputdir, refname, sortby="aps", names=get_names)
-        plot_pr(pr_preds, None, None, None, pr_random_bases, coverage, outputdir, refname, sortby="fmax", names=get_names)
-
-        dataset_metrics_default_f = resultdir / "{}.analysis.all.dataset.default.metrics.csv".format(refname)
-        dataset_metrics_default = pd.read_csv(dataset_metrics_default_f, index_col=0)
-
-        codestart = 'D' if 'disorder' in str(refdir) else 'B'
-        dataset_metrics_single_preds = [pd.read_csv(f, index_col=[0, 1]) for f in resultdir.glob("{}.analysis.{}*dataset*".format(Path(refname).stem, codestart))]
-
-        # limited the numbers of metrics to plot
-        for optimized_metric in ["default"] + list(dataset_metrics_default.columns):
-            if optimized_metric not in {"aucroc", "aucpr", "thr", "aps"}:
-
-                predictions = pd.read_csv(resultdir / "{}.analysis.all.dataset._.predictions.csv".format(refname), index_col=[0, 1], header=[0, 1])
-                # naive_preds = [pd.read_csv(baselndir / "{}.{}.all.dataset._.predictions.csv".format(refname, n), index_col=[0, 1], header=[0, 1]) for n in basetypes[:3]]
-
-                dataset_metrics_preds_f = resultdir / "{}.analysis.all.dataset.{}.metrics.csv".format(refname, optimized_metric)
-                dataset_metrics_preds = pd.read_csv(dataset_metrics_preds_f, index_col=0)
-
-                bootstr_ci_preds_f = resultdir / "{}.analysis.all.ci.{}.metrics.csv".format(refname, optimized_metric)
-                bootstr_ci_preds = pd.read_csv(bootstr_ci_preds_f, index_col=[0, 1])
-                target_metrics_preds_f = resultdir / "{}.analysis.all.target.{}.metrics.csv".format(refname, optimized_metric)
-                target_metrics_preds = pd.read_csv(target_metrics_preds_f, index_col=[0, 1])
-
-                dataset_metrics_bases = []
-                target_metrics_bases = []
-                for bt in basetypes:
-                    # if bt in basetypes[3:]:
-                    if bt in basetypes:
-                        target_metrics_base_f = baselndir / "{}.{}.avg.target.{}.metrics.csv".format(refname, bt, optimized_metric)
-                        target_metrics_bases.append(pd.read_csv(target_metrics_base_f, index_col=[0, 1], header=[0, 1]).xs('mean', level=1, axis=1))
-                        dataset_metrics_base_f = baselndir / "{}.{}.avg.dataset.{}.metrics.csv".format(refname, bt, optimized_metric)
-                        dataset_metrics_bases.append(pd.read_csv(dataset_metrics_base_f, index_col=0).loc["mean"].to_frame(bt).T)
-                    else:
-                        target_metrics_base_f = baselndir / "{}.{}.all.target.{}.metrics.csv".format(refname, bt, optimized_metric)
-                        target_metrics_bases.append(pd.read_csv(target_metrics_base_f, index_col=[0, 1]))
-                        dataset_metrics_base_f = baselndir / "{}.{}.all.dataset.{}.metrics.csv".format(refname, bt, optimized_metric)
-                        dataset_metrics_bases.append(pd.read_csv(dataset_metrics_base_f, index_col=[0]))
-
-                # old
-                target_metrics_bases = pd.concat(target_metrics_bases)
-                dataset_metrics_bases = pd.concat(dataset_metrics_bases)
-
-                # target_metrics_bases = []
-                # dataset_metrics_bases = []
-
-                for metric_to_plot in ["f1s"]:
-                    if metric_to_plot not in {"aucroc", "aucpr", "thr", "aps"}:
-                        plot_dataset_target_metric(metric_to_plot, dataset_metrics_preds, dataset_metrics_bases,
-                                                   target_metrics_preds, target_metrics_bases, bootstr_ci_preds, outputdir,
-                                                   "{}_opt{}".format(refname, optimized_metric), names=get_names)
-
-                        # plot_dat_tgt_metric_cpuspeed(metric_to_plot, dataset_metrics_preds, dataset_metrics_bases,
-                        #                            target_metrics_preds, target_metrics_bases, bootstr_ci_preds, outputdir,
-                        #                            "{}_opt{}".format(refname, optimized_metric), names=get_names)
-
-                        plot_pertarget_permethod_heatmap(metric_to_plot, target_metrics_preds, target_metrics_bases,
-                                                         outputdir, "{}_opt{}".format(refname, optimized_metric), names=get_names)
-                        plot_methdod_correlation(metric_to_plot, target_metrics_preds, outputdir, "{}_opt{}".format(refname, optimized_metric))
-
-                plot_average_overall_ranking(optimized_metric, target_metrics_preds, target_metrics_bases, outputdir, refname, names=get_names, level='target')
-                plot_average_overall_ranking(optimized_metric, dataset_metrics_preds, dataset_metrics_bases,
-                                                 outputdir, refname, names=get_names, level='dataset')
-                plot_average_overall_ranking(optimized_metric, target_metrics_preds, target_metrics_bases, outputdir, refname, plotfirst=10, names=get_names, level='target')
-                plot_average_overall_ranking(optimized_metric, dataset_metrics_preds, dataset_metrics_bases, outputdir, refname, plotfirst=10, names=get_names, level='dataset')
-                # plot_icontent_correlation(optimized_metric, predictions, *naive_preds, outputdir, refname, names=get_names)
-
-                # if optimized_metric == 'f1s':
-                #     plot_cputime_to_performance('f1s', target_metrics_preds, outputdir, refname, names=get_names)
-
-                # if optimized_metric != "default":
-                #     plot_metric_to_threshold(optimized_metric,
-                #                              dataset_metrics_single_preds,
-                #                              dataset_metrics_default["thr"].round(3),
-                #                              dataset_metrics_preds["thr"].round(3),
-                #                              outputdir, refname, names=get_names)
-
-
+    # for reference in tqdm(refdir.glob(args.glob), desc="Plotting", total=len(list(refdir.glob(args.glob)))):
+    # Process()
