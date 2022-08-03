@@ -1,8 +1,12 @@
-results/*
-plots/*
+/results
+!/results/.gitkeep
+/plots
+!/plots/.gitkeep
+
 /data
 !/data/predictions/.gitkeep
 !/data/annotations/.gitkeep
 !/data/references/.gitkeep
+!/data/baselines/.gitkeep
 
 /.idea
