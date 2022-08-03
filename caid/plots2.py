@@ -3,6 +3,7 @@ import json
 import logging
 import math
 import sys
+import time
 import warnings
 from itertools import product
 from multiprocessing import Pool, cpu_count
@@ -804,7 +805,4 @@ if __name__ == "__main__":
     # iterate over file in dir (foreach reference)
 
     with Pool(processes=cpu_count()) as pool:
-        pool.map(make_plots, refdir.glob(args.glob))
-
-    # for reference in tqdm(refdir.glob(args.glob), desc="Plotting", total=len(list(refdir.glob(args.glob)))):
-    # Process()
+        pool.map(make_plots, refdir.glob(args.glob), chunksize=1)

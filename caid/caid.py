@@ -22,7 +22,7 @@ def parse_args():
     parser.add_argument('-b', '--labels', default=None, help='filename with labels')
 
     parser.add_argument('-l', '--log', type=str, default=None, help='log file')
-    parser.add_argument("-ll", "--logLevel", default="INFO",
+    parser.add_argument("-ll", "--logLevel", default="WARNING",
                         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
                         help='log level filter. All levels >= choice will be displayed')
 
