@@ -1,19 +1,16 @@
 # module imports
-from pathlib import Path
-import logging
 import argparse
+import logging
 import sys
-# relative imports
-from vectorized_metrics import bvaluation
+from pathlib import Path
 
-# Get path where this piece of code is
-# SCRIPT_DIR = Path(getsourcefile(lambda : 0)).resolve()
+from vectorized_metrics.vectorized_metrics import bvaluation
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        prog='caid-assess', description="CAID: Critical Assessment of Intrinsic Disorder",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+            prog='caid-assess', description="CAID: Critical Assessment of Intrinsic Disorder",
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('reference', help='reference file')
 
@@ -25,9 +22,9 @@ def parse_args():
     parser.add_argument('-b', '--labels', default=None, help='filename with labels')
 
     parser.add_argument('-l', '--log', type=str, default=None, help='log file')
-    parser.add_argument("-ll", "--logLevel", default="ERROR",
+    parser.add_argument("-ll", "--logLevel", default="INFO",
                         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-                        help='log level filter. All levels <= choice will be displayed')
+                        help='log level filter. All levels >= choice will be displayed')
 
     args = parser.parse_args()
     return args
@@ -42,7 +39,6 @@ def parse_args():
 
 
 def set_logger(logfile, level):
-
     logging.basicConfig(level=level,
                         format='%(asctime)s | %(module)-13s | %(levelname)-8s | %(message)s',
                         stream=open(logfile) if logfile else sys.stderr)
@@ -51,5 +47,5 @@ def set_logger(logfile, level):
 if __name__ == '__main__':
     args = parse_args()
     set_logger(args.log, args.logLevel)
-    bvaluation(args.reference, list(Path(args.predictions).glob('**/*')),
-               outpath=args.outputDir, dataset=True, bootstrap=True, target=True)
+    predictions = list(filter(lambda x: ".gitkeep" not in x.stem, list(Path(args.predictions).glob('**/*'))))
+    bvaluation(args.reference, predictions, outpath=args.outputDir, dataset=True, bootstrap=True, target=True)

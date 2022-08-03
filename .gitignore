@@ -1,5 +1,8 @@
-data/predictions/*
-data/references/*
-data/annotations/*
 results/*
 plots/*
+/data
+!/data/predictions/.gitkeep
+!/data/annotations/.gitkeep
+!/data/references/.gitkeep
+
+/.idea

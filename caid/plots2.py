@@ -12,6 +12,7 @@ from pathlib import Path
 from itertools import product
 import matplotlib.pyplot as plt
 from scipy.stats import ttest_ind, pearsonr, hmean
+from tqdm import tqdm
 
 warnings.filterwarnings("ignore")
 
@@ -497,7 +498,7 @@ def parse_args():
                         help='directory where the output will be written (default: cwd)')
 
     parser.add_argument('-d', '--dpi', default=75, help='figures dpi')
-    parser.add_argument('-g', '--glob', default='*.txt')
+    parser.add_argument('-g', '--glob', default='*.fasta')
     parser.add_argument('-n', '--names', default=None, help='json file with predictors names')
 
     parser.add_argument('-l', '--log', type=str, default=None, help='log file')
@@ -647,7 +648,7 @@ if __name__ == "__main__":
     # plot_species_count(refstats_target, outputdir)
 
     # iterate over file in dir (foreach reference)
-    for reference in refdir.glob(args.glob):
+    for reference in tqdm(refdir.glob(args.glob), desc="Plotting", total=len(list(refdir.glob(args.glob)))):
         logging.info(reference)
 
         reference = Path(reference)
@@ -681,7 +682,7 @@ if __name__ == "__main__":
         plot_pr(pr_preds, None, None, None, None, coverage, outputdir, refname, sortby="auc", names=get_names)
         plot_pr(pr_preds, None, None, None, None, coverage, outputdir, refname, sortby="aps", names=get_names)
         plot_pr(pr_preds, None, None, None, None, coverage, outputdir, refname, sortby="fmax", names=get_names)
-        
+
         dataset_metrics_default_f = resultdir / "{}.analysis.all.dataset.default.metrics.csv".format(refname)
         dataset_metrics_default = pd.read_csv(dataset_metrics_default_f, index_col=0)
 
