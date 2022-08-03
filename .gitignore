@@ -1,5 +1,6 @@
 data/predictions/*
 data/references/*
 data/annotations/*
+data/baselines/*
 results/*
 plots/*

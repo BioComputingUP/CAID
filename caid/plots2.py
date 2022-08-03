@@ -352,9 +352,9 @@ def plot_roc(preds_rocs, cons_roc, pdb_roc, gene3d_roc, random_rocs, outdir, out
                 # markerfacecolor='w', markersize=10,
                 # c='w', label=names(n.columns.get_level_values(0)[0]))
 
-    # for rr, m in zip(random_rocs, ['*', 'P', 'd']):
-        # ax.plot(*rr[['fpr', 'tpr']].mean(), marker=m, markeredgecolor='silver', markeredgewidth=2,
-                # markerfacecolor='w', markersize=10, c='w', label=names(rr.index.get_level_values(0)[0]))
+    for rr, m in zip(random_rocs, ['*', 'P', 'd']):
+        ax.plot(*rr[['fpr', 'tpr']].mean(), marker=m, markeredgecolor='silver', markeredgewidth=2,
+                markerfacecolor='w', markersize=10, c='w', label=names(rr.index.get_level_values(0)[0]))
     ax.legend()
     lhandles, llabels = ax.get_legend_handles_labels()
     # if cons_roc is not None:
@@ -418,11 +418,11 @@ def plot_pr(pred_prs, cons_prc, pdb_prc, gene3d_prc, random_prcs, cov, outdir, o
                 # c='w', label=names(nname))
 
     # plot randoms
-    # for rprc, m in zip(random_prcs, ['*', 'P', 'd']):
-    #     rname = rprc.index.get_level_values(0)[0]
-    #     cov[rname] = 1
-    #     ax.plot(*rprc[['tpr', 'ppv']].mean(), marker=m, markeredgecolor='k', markeredgewidth=1, zorder=60,
-    #             markerfacecolor='w', markersize=8, c='w', label=names(rname))
+    for rprc, m in zip(random_prcs, ['*', 'P', 'd']):
+        rname = rprc.index.get_level_values(0)[0]
+        cov[rname] = 1
+        ax.plot(*rprc[['tpr', 'ppv']].mean(), marker=m, markeredgecolor='k', markeredgewidth=1, zorder=60,
+                markerfacecolor='w', markersize=8, c='w', label=names(rname))
 
     # cov = cov.to_dict()
     ax.legend()
@@ -487,7 +487,7 @@ def parse_args():
 
     parser.add_argument('resultDir', help='directory where CAID predictors results are saved')
 
-    # parser.add_argument('baselineDir', help="directory where CAID baselines results are saved")
+    parser.add_argument('baselineDir', help="directory where CAID baselines results are saved")
 
     parser.add_argument('referenceDir', help="directory where refernces are stored")
 
@@ -620,18 +620,20 @@ if __name__ == "__main__":
 
     dpi = args.dpi
     resultdir = Path(args.resultDir)
-    # baselndir = Path(args.baselineDir)
+    baselndir = Path(args.baselineDir)
     outputdir = Path(args.outputDir)
     refdir = Path(args.referenceDir)
     # datadir = Path(args.datasetStatsDir)
 
     get_names = get_names if args.names is not None else None
 
+
     # DON'T CHANGE THE ORDER
     # basetypes = ["cons", "naive-pdb-atleast-reverse", "naive-gene3d-reverse",   # naive
-    #              # "fixedposfrc",
-    #              "random", "shuffledataset", "shuffletargets"]   # random
+                 # "fixedposfrc",
+                #  "random", "shuffledataset", "shuffletargets"]   # random
 
+    basetypes = ["random", "shuffledataset", "shuffletargets"] # random baselines
     # plot_metrics_correlation(resultdir, outputdir)
     # plot_metrics_clustermap(resultdir, outputdir)
 
@@ -656,31 +658,39 @@ if __name__ == "__main__":
 
         roc_preds_f = resultdir / "{}.analysis.all.dataset._.roc.csv".format(refname)
         roc_preds = pd.read_csv(roc_preds_f, index_col=[0], header=[0, 1, 2])
+        # old
         # roc_bases = [pd.read_csv(baselndir / "{}.{}.all.dataset._.roc.csv".format(refname, b), index_col=[0],
-                                #  header=[0, 1, 2]) for b in basetypes[1:3]]
-        # cons_roc = pd.read_csv('../baseline/{}.cons.all.dataset._.roc.csv'.format(refname), index_col=[0], header=[0, 1, 2])
-        # roc_random_bases = [pd.read_csv('../baseline/{}.{}.all.target.mcc.metrics.csv'.format(refname, b), index_col=0) for b in basetypes[3:]]
+        #                          header=[0, 1, 2]) for b in basetypes[1:3]]
+        # new
+        # roc_bases = [pd.read_csv(baselndir / "{}.{}.all.dataset._.roc.csv".format(refname, b), index_col=[0],
+        #                          header=[0, 1, 2]) for b in basetypes]
+        
+        # cons_roc = pd.read_csv(baselndir / '{}.cons.all.dataset._.roc.csv'.format(refname), index_col=[0], header=[0, 1, 2])
+        roc_random_bases = [pd.read_csv(baselndir / '{}.{}.all.target.mcc.metrics.csv'.format(refname, b), index_col=0) for b in basetypes]
 
         pr_preds_f = resultdir / "{}.analysis.all.dataset._.pr.csv".format(refname)
         pr_preds = pd.read_csv(pr_preds_f, index_col=[0], header=[0, 1, 2, 3])
         # pr_bases = [pd.read_csv(baselndir / "{}.{}.all.dataset._.pr.csv".format(refname, b), index_col=[0],
-                                # header=[0, 1, 2, 3]) for b in basetypes[1:3]]
-        # cons_pr = pd.read_csv('../baseline/{}.cons.all.dataset._.pr.csv'.format(refname), index_col=[0],
-                            #    header=[0, 1, 2, 3])
-        # pr_random_bases = [pd.read_csv('../baseline/{}.{}.all.target.mcc.metrics.csv'.format(refname, b), index_col=0)
-                            # for b in basetypes[3:]]
+        #                         header=[0, 1, 2, 3]) for b in basetypes]
+        # cons_pr = pd.read_csv(baselndir / '{}.cons.all.dataset._.pr.csv'.format(refname), index_col=[0],
+        #                        header=[0, 1, 2, 3])
+        pr_random_bases = [pd.read_csv(baselndir / '{}.{}.all.target.mcc.metrics.csv'.format(refname, b), index_col=0)
+                            for b in basetypes]
 
-        plot_roc(roc_preds, None, None, None, None, outputdir, refname, names=get_names)
+        plot_roc(roc_preds, None, None, None, roc_random_bases, outputdir, refname, names=get_names)
         coverage = pd.read_csv(resultdir / '{}.analysis.all.target.default.metrics.csv'.format(refname), index_col=[0,1], header=[0,1])
         coverage = (coverage.groupby(level=0).count().max(axis=1) / np.max(coverage.groupby(level=0).count().values))
+
         # old
         # plot_pr(pr_preds, cons_pr, *pr_bases, pr_random_bases, coverage, outputdir, refname, sortby="auc", names=get_names)
         # plot_pr(pr_preds, cons_pr, *pr_bases, pr_random_bases, coverage, outputdir, refname, sortby="aps", names=get_names)
         # plot_pr(pr_preds, cons_pr, *pr_bases, pr_random_bases, coverage, outputdir, refname, sortby="fmax", names=get_names)
+        
+        # new
+        plot_pr(pr_preds, None, None, None, pr_random_bases, coverage, outputdir, refname, sortby="auc", names=get_names)
+        plot_pr(pr_preds, None, None, None, pr_random_bases, coverage, outputdir, refname, sortby="aps", names=get_names)
+        plot_pr(pr_preds, None, None, None, pr_random_bases, coverage, outputdir, refname, sortby="fmax", names=get_names)
 
-        plot_pr(pr_preds, None, None, None, None, coverage, outputdir, refname, sortby="auc", names=get_names)
-        plot_pr(pr_preds, None, None, None, None, coverage, outputdir, refname, sortby="aps", names=get_names)
-        plot_pr(pr_preds, None, None, None, None, coverage, outputdir, refname, sortby="fmax", names=get_names)
         
         dataset_metrics_default_f = resultdir / "{}.analysis.all.dataset.default.metrics.csv".format(refname)
         dataset_metrics_default = pd.read_csv(dataset_metrics_default_f, index_col=0)
@@ -703,46 +713,47 @@ if __name__ == "__main__":
                 target_metrics_preds_f = resultdir / "{}.analysis.all.target.{}.metrics.csv".format(refname, optimized_metric)
                 target_metrics_preds = pd.read_csv(target_metrics_preds_f, index_col=[0, 1])
 
-                # dataset_metrics_bases = []
-                # target_metrics_bases = []
-                # for bt in basetypes:
-                #     if bt in basetypes[3:]:
-                #         target_metrics_base_f = baselndir / "{}.{}.avg.target.{}.metrics.csv".format(refname, bt, optimized_metric)
-                #         target_metrics_bases.append(pd.read_csv(target_metrics_base_f, index_col=[0, 1], header=[0, 1]).xs('mean', level=1, axis=1))
-                #         dataset_metrics_base_f = baselndir / "{}.{}.avg.dataset.{}.metrics.csv".format(refname, bt, optimized_metric)
-                #         dataset_metrics_bases.append(pd.read_csv(dataset_metrics_base_f, index_col=0).loc["mean"].to_frame(bt).T)
-                #     else:
-                #         target_metrics_base_f = baselndir / "{}.{}.all.target.{}.metrics.csv".format(refname, bt, optimized_metric)
-                #         target_metrics_bases.append(pd.read_csv(target_metrics_base_f, index_col=[0, 1]))
-                #         dataset_metrics_base_f = baselndir / "{}.{}.all.dataset.{}.metrics.csv".format(refname, bt, optimized_metric)
-                #         dataset_metrics_bases.append(pd.read_csv(dataset_metrics_base_f, index_col=[0]))
+                dataset_metrics_bases = []
+                target_metrics_bases = []
+                for bt in basetypes:
+                    # if bt in basetypes[3:]:
+                    if bt in basetypes:
+                        target_metrics_base_f = baselndir / "{}.{}.avg.target.{}.metrics.csv".format(refname, bt, optimized_metric)
+                        target_metrics_bases.append(pd.read_csv(target_metrics_base_f, index_col=[0, 1], header=[0, 1]).xs('mean', level=1, axis=1))
+                        dataset_metrics_base_f = baselndir / "{}.{}.avg.dataset.{}.metrics.csv".format(refname, bt, optimized_metric)
+                        dataset_metrics_bases.append(pd.read_csv(dataset_metrics_base_f, index_col=0).loc["mean"].to_frame(bt).T)
+                    else:
+                        target_metrics_base_f = baselndir / "{}.{}.all.target.{}.metrics.csv".format(refname, bt, optimized_metric)
+                        target_metrics_bases.append(pd.read_csv(target_metrics_base_f, index_col=[0, 1]))
+                        dataset_metrics_base_f = baselndir / "{}.{}.all.dataset.{}.metrics.csv".format(refname, bt, optimized_metric)
+                        dataset_metrics_bases.append(pd.read_csv(dataset_metrics_base_f, index_col=[0]))
 
                 # old
-                # target_metrics_bases = pd.concat(target_metrics_bases)
-                # dataset_metrics_bases = pd.concat(dataset_metrics_bases)
+                target_metrics_bases = pd.concat(target_metrics_bases)
+                dataset_metrics_bases = pd.concat(dataset_metrics_bases)
 
-                target_metrics_bases = []
-                dataset_metrics_bases = []
+                # target_metrics_bases = []
+                # dataset_metrics_bases = []
 
                 for metric_to_plot in ["f1s"]:
                     if metric_to_plot not in {"aucroc", "aucpr", "thr", "aps"}:
-                        # plot_dataset_target_metric(metric_to_plot, dataset_metrics_preds, dataset_metrics_bases,
-                        #                            target_metrics_preds, target_metrics_bases, bootstr_ci_preds, outputdir,
-                        #                            "{}_opt{}".format(refname, optimized_metric), names=get_names)
+                        plot_dataset_target_metric(metric_to_plot, dataset_metrics_preds, dataset_metrics_bases,
+                                                   target_metrics_preds, target_metrics_bases, bootstr_ci_preds, outputdir,
+                                                   "{}_opt{}".format(refname, optimized_metric), names=get_names)
 
                         # plot_dat_tgt_metric_cpuspeed(metric_to_plot, dataset_metrics_preds, dataset_metrics_bases,
                         #                            target_metrics_preds, target_metrics_bases, bootstr_ci_preds, outputdir,
                         #                            "{}_opt{}".format(refname, optimized_metric), names=get_names)
 
-                        # plot_pertarget_permethod_heatmap(metric_to_plot, target_metrics_preds, target_metrics_bases,
-                        #                                  outputdir, "{}_opt{}".format(refname, optimized_metric), names=get_names)
+                        plot_pertarget_permethod_heatmap(metric_to_plot, target_metrics_preds, target_metrics_bases,
+                                                         outputdir, "{}_opt{}".format(refname, optimized_metric), names=get_names)
                         plot_methdod_correlation(metric_to_plot, target_metrics_preds, outputdir, "{}_opt{}".format(refname, optimized_metric))
 
-                # plot_average_overall_ranking(optimized_metric, target_metrics_preds, target_metrics_bases, outputdir, refname, names=get_names, level='target')
-                # plot_average_overall_ranking(optimized_metric, dataset_metrics_preds, dataset_metrics_bases,
-                #                                  outputdir, refname, names=get_names, level='dataset')
-                # plot_average_overall_ranking(optimized_metric, target_metrics_preds, target_metrics_bases, outputdir, refname, plotfirst=10, names=get_names, level='target')
-                # plot_average_overall_ranking(optimized_metric, dataset_metrics_preds, dataset_metrics_bases, outputdir, refname, plotfirst=10, names=get_names, level='dataset')
+                plot_average_overall_ranking(optimized_metric, target_metrics_preds, target_metrics_bases, outputdir, refname, names=get_names, level='target')
+                plot_average_overall_ranking(optimized_metric, dataset_metrics_preds, dataset_metrics_bases,
+                                                 outputdir, refname, names=get_names, level='dataset')
+                plot_average_overall_ranking(optimized_metric, target_metrics_preds, target_metrics_bases, outputdir, refname, plotfirst=10, names=get_names, level='target')
+                plot_average_overall_ranking(optimized_metric, dataset_metrics_preds, dataset_metrics_bases, outputdir, refname, plotfirst=10, names=get_names, level='dataset')
                 # plot_icontent_correlation(optimized_metric, predictions, *naive_preds, outputdir, refname, names=get_names)
 
                 # if optimized_metric == 'f1s':
