@@ -684,7 +684,7 @@ def make_plots(reference):
                                     resultdir.glob("{}.analysis.{}*dataset*".format(Path(refname).stem, codestart))]
 
     # limited the numbers of metrics to plot
-    for optimized_metric in ["default"] + list(dataset_metrics_default.columns):
+    for optimized_metric in ["default", "f1s", "mcc", "bac"]:
         if optimized_metric not in {"aucroc", "aucpr", "thr", "aps"}:
 
             predictions = pd.read_csv(resultdir / "{}.analysis.all.dataset._.predictions.csv".format(refname),
