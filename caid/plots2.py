@@ -2,8 +2,8 @@ import argparse
 import json
 import logging
 import math
+import os
 import sys
-import time
 import warnings
 from itertools import product
 from multiprocessing import Pool, cpu_count
@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from scipy.stats import hmean, pearsonr, ttest_ind
+from tqdm import tqdm
 
 warnings.filterwarnings("ignore")
 
@@ -300,41 +301,42 @@ def plot_dataset_target_metric(metric, dat_metr_preds, dat_metr_bases, tgt_metr_
     logging.info("Plotting metric barplot: {}, {}".format(metric, outbase))
     fig, axes = plt.subplots(1, 2, figsize=(15, 6), sharey=True)
 
-    negatives, optm = outbase.split("_")
-    optm = optm[3:]
+    negatives, optm = outbase.split("_opt")
+    # optm = optm[3:]
 
     # print('metric', metric)
     # print('dat_metr_preds', dat_metr_preds.columns)
     # plot dataset metrics on left subplot
     dat_m = dat_metr_preds[metric].sort_values(ascending=False).append(
             dat_metr_bases[metric].sort_values(ascending=False))
-    yerr = bts_ci_preds.xs(metric, level=1)[["lo", 'hi']].reindex(dat_m.index)
+    # yerr = bts_ci_preds.xs(metric, level=1)[["lo", 'hi']].reindex(dat_m.index)
     colors = ['silver'] * len(dat_metr_preds) + ['grey'] * len(dat_metr_bases)
 
     if names is not None:
         dat_m = dat_m.rename(names)
-        yerr = yerr.rename(names)
+        # yerr = yerr.rename(names)
 
-    ax = dat_m.plot.bar(ax=axes[0], color=colors, yerr=yerr)
+    ax = dat_m.plot.bar(ax=axes[0], color=colors)
 
     ax.axhline(dat_metr_bases[metric].max())
     ax.set_title("Dataset {}; Negatives: {}; Optimized on: {}".format(metric.upper(), negatives, optm.upper()))
     ax.set_ylabel(metric.upper())
 
     # plot target metrics on right subplot
-    n = tgt_metr_preds.groupby(level=0).count().append(tgt_metr_bases.groupby(level=0).count())
-    tgt_m = tgt_metr_preds.groupby(level=0).mean()[metric].sort_values(ascending=False).append(
-            tgt_metr_bases.groupby(level=0).mean()[metric].sort_values(ascending=False))
-    yerr = tgt_metr_preds.groupby(level=0).std()[metric].append(
-            tgt_metr_bases.groupby(level=0).std()[metric])[tgt_m.index] / n[metric] ** 0.5 / 2
-    colors = ['silver'] * len(tgt_metr_preds.groupby(level=0).mean()) + ['grey'] * len(
-            tgt_metr_bases.groupby(level=0).mean())
+    tgt_bases_grouped = tgt_metr_bases.groupby(level=0)
+    tgt_preds_grouped = tgt_metr_preds.groupby(level=0)
+
+    n = tgt_preds_grouped.count().append(tgt_bases_grouped.count())
+    tgt_m = tgt_preds_grouped.mean()[metric].sort_values(ascending=False).append(
+        tgt_bases_grouped.mean()[metric].sort_values(ascending=False))
+    yerr = tgt_preds_grouped.std()[metric].append(tgt_bases_grouped.std()[metric])[tgt_m.index] / n[metric] ** 0.5 / 2
+    colors = ['silver'] * len(tgt_preds_grouped.mean()) + ['grey'] * len(tgt_bases_grouped.mean())
 
     if names is not None:
         tgt_m = tgt_m.rename(names)
         yerr = yerr.rename(names)
 
-    ax = tgt_m.plot.bar(ax=axes[1], color=colors, yerr=yerr)
+    ax = tgt_m.plot.bar(ax=axes[1], color=colors)
 
     ax.axhline(tgt_metr_bases.groupby(level=0).mean()[metric].max())
     ax.set_title("Average target {}; Negatives: {}; Optimized on: {}".format(metric.upper(), negatives, optm.upper()))
@@ -349,6 +351,13 @@ def plot_roc(preds_rocs, cons_roc, pdb_roc, gene3d_roc, random_rocs, outdir, out
     # procs, proc, groc, dataset, title, names = names, croc = None
     logging.info("Plotting roc")
     fig, ax = plt.subplots(figsize=(7.5, 7.5))
+
+    r = np.linspace(0, 1, 1000)
+    fs = np.mean(np.array(np.meshgrid(r, r)).T.reshape(-1, 2), axis=1).reshape(1000, 1000)
+    cs = ax.contour(r[::-1], r, fs, levels=np.linspace(0.1, 1, 10), colors='silver', alpha=0.7, linewidths=1,
+                    linestyles='--')
+    ax.clabel(cs, inline=True, fmt='%.1f', fontsize=10, manual=[(l, 1 - l) for l in cs.levels[:-1]])
+
     if names:
         preds_rocs.rename(names, axis=1, level=0)
     auc_rocs = sorted(preds_rocs.columns.droplevel(2).unique(), key=lambda t: t[1], reverse=True)[:10]
@@ -361,10 +370,9 @@ def plot_roc(preds_rocs, cons_roc, pdb_roc, gene3d_roc, random_rocs, outdir, out
     # ax.plot(*cons_roc.dropna().T.values, label="Naive Conservation", color='silver', linewidth=2)
 
     # for n, m in zip([pdb_roc, gene3d_roc], ['o', 's']):
-    # idx = n.index.values - 0.5
-    # ax.plot(*n.iloc[idx[idx > 0].argmin()], marker=m, markeredgecolor='silver', markeredgewidth=2,
-    # markerfacecolor='w', markersize=10,
-    # c='w', label=names(n.columns.get_level_values(0)[0]))
+    #     idx = n.index.values - 0.5
+    #     ax.plot(*n.iloc[idx[idx > 0].argmin()], marker=m, markeredgecolor='silver', markeredgewidth=2,
+    #     markerfacecolor='w', markersize=10, c='w', label=names(n.columns.get_level_values(0)[0]))
 
     for rr, m in zip(random_rocs, ['*', 'P', 'd']):
         ax.plot(*rr[['fpr', 'tpr']].mean(), marker=m, markeredgecolor='silver', markeredgewidth=2,
@@ -374,10 +382,10 @@ def plot_roc(preds_rocs, cons_roc, pdb_roc, gene3d_roc, random_rocs, outdir, out
     # if cons_roc is not None:
     #     auc_rocs.extend(cons_roc.rename(names, axis=1, level=0).columns.droplevel(2).unique().tolist())
     pwauc = next(zip(*auc_rocs))
-    # ax.legend(lhandles,
-    #           ['{}'.format('{} - AUC: {}'.format(names(l), auc_rocs[pwauc.index(l)][1]) if l in pwauc else l) for l in
-    #            llabels],
-    #           bbox_to_anchor=(0., -.37, 1., .102), loc='lower left', ncol=2, mode="expand", borderaxespad=0)
+    ax.legend(lhandles,
+              ['{}'.format('{} - AUC: {}'.format(names(l), auc_rocs[pwauc.index(l)][1]) if l in pwauc else l) for l in
+               llabels],
+              bbox_to_anchor=(0., -.37, 1., .102), loc='lower left', ncol=2, mode="expand", borderaxespad=0)
 
     ax.set_xlabel("FPR")
     ax.set_ylabel("TPR")
@@ -447,16 +455,17 @@ def plot_pr(pred_prs, cons_prc, pdb_prc, gene3d_prc, random_prcs, cov, outdir, o
     # if cons_roc is not None:
     # sorter.extend(cons_roc.rename(names, axis=1, level=0).columns.droplevel(2).unique().tolist())
     pwauc = next(zip(*sorter))
-    # ax.legend(lhandles,
-    #           ['{}'.format('{} - {}: {}, C: {:.2f}'.format(names(l), sortby.upper(), sorter[pwauc.index(l)][1], cov[l]) if l in pwauc else l) for l in llabels],
-    #           loc='center left', bbox_to_anchor=(1, 0.5))#, mode="expand", borderaxespad=0)
+    ax.legend(lhandles,
+              ['{}'.format('{} - {}: {}, C: {:.2f}'.format(names(l), sortby.upper(), sorter[pwauc.index(l)][1], cov[l]) if l in pwauc else l) for l in llabels],
+              loc='center left', bbox_to_anchor=(1, 0.5))#, mode="expand", borderaxespad=0)
 
     ax.set_xlim(-0.05, 1.05)
     ax.set_ylim(-0.05, 1.05)
     ax.set_xlabel("Recall")
     ax.set_ylabel("Precision")
     fig.tight_layout()
-    plt.savefig(outdir / "{}pr.{}.png".format(outbase + "_" if outbase else outbase, sortby), dpi=dpi, bbox_inches="tight")
+    plt.savefig(outdir / "{}pr.{}.png".format(outbase + "_" if outbase else outbase, sortby), dpi=dpi,
+                bbox_inches="tight")
     plt.close(fig)
 
 
@@ -464,7 +473,8 @@ def plot_cputime_to_performance(metric, tgt_pred_metrics, outdir, outbase, names
     logging.info('plotting cputime to {}'.format(metric))
     fig, ax = plt.subplots(figsize=(8, 6))
 
-    cputime = pd.read_csv('../data/dataset_stats/cpu_time.csv', header=[0, 1], index_col=[0]).groupby(level=0, axis=1).sum()
+    cputime = pd.read_csv('../data/dataset_stats/cpu_time.csv', header=[0, 1], index_col=[0]).groupby(level=0,
+                                                                                                      axis=1).sum()
     tgt_pred_metrics = tgt_pred_metrics[metric]
     y = tgt_pred_metrics.groupby(level=0).mean().sort_values(ascending=False)
     x = np.log10(cputime).mean().reindex(y.index).replace([np.inf, -np.inf], -2)
@@ -514,7 +524,7 @@ def parse_args():
     parser.add_argument('-o', '--outputDir', default='.',
                         help='directory where the output will be written (default: cwd)')
 
-    parser.add_argument('-d', '--dpi', default=75, help='figures dpi')
+    parser.add_argument('-d', '--dpi', default=150, help='figures dpi')
     parser.add_argument('-g', '--glob', default='*.fasta')
     parser.add_argument('-n', '--names', default=None, help='json file with predictors names')
 
@@ -603,7 +613,7 @@ def get_names(fname):
     names = json.load(open(args.names))
 
     name = names.get(fname)
-    fname = fname.lower()
+    # fname = fname.lower()
     if name is None:
         if "cons" in fname:
             name = "Naive Conservation"
@@ -621,6 +631,8 @@ def get_names(fname):
             name = "Fixed ID content"
         elif "ref" in fname:
             name = "Reference"
+        else:
+            name = fname
     return name
 
 
@@ -673,8 +685,8 @@ def make_plots(reference):
     # plot_pr(pr_preds, cons_pr, *pr_bases, pr_random_bases, coverage, outputdir, refname, sortby="fmax", names=get_names)
 
     # new
-    plot_pr(pr_preds, None, None, None, pr_random_bases, coverage, outputdir, refname, sortby="auc", names=get_names)
-    plot_pr(pr_preds, None, None, None, pr_random_bases, coverage, outputdir, refname, sortby="aps", names=get_names)
+    # plot_pr(pr_preds, None, None, None, pr_random_bases, coverage, outputdir, refname, sortby="auc", names=get_names)
+    # plot_pr(pr_preds, None, None, None, pr_random_bases, coverage, outputdir, refname, sortby="aps", names=get_names)
     plot_pr(pr_preds, None, None, None, pr_random_bases, coverage, outputdir, refname, sortby="fmax", names=get_names)
 
     dataset_metrics_default_f = resultdir / "{}.analysis.all.dataset.default.metrics.csv".format(refname)
@@ -685,87 +697,86 @@ def make_plots(reference):
                                     resultdir.glob("{}.analysis.{}*dataset*".format(Path(refname).stem, codestart))]
 
     # limited the numbers of metrics to plot
-    for optimized_metric in ["default", "f1s", "mcc", "bac"]:
-        if optimized_metric not in {"aucroc", "aucpr", "thr", "aps"}:
+    for optimized_metric in tqdm(["default", "f1s", "mcc", "bac"], desc="Plotting selected metrics"):
 
-            predictions = pd.read_csv(resultdir / "{}.analysis.all.dataset._.predictions.csv".format(refname),
-                                      index_col=[0, 1], header=[0, 1])
-            # naive_preds = [pd.read_csv(baselndir / "{}.{}.all.dataset._.predictions.csv".format(refname, n), index_col=[0, 1], header=[0, 1]) for n in basetypes[:3]]
+        predictions = pd.read_csv(resultdir / "{}.analysis.all.dataset._.predictions.csv".format(refname), index_col=[0, 1], header=[0, 1])
+        # naive_preds = [pd.read_csv(baselndir / "{}.{}.all.dataset._.predictions.csv".format(refname, n), index_col=[0, 1], header=[0, 1]) for n in basetypes[:3]]
 
-            dataset_metrics_preds_f = resultdir / "{}.analysis.all.dataset.{}.metrics.csv".format(refname,
-                                                                                                  optimized_metric)
-            dataset_metrics_preds = pd.read_csv(dataset_metrics_preds_f, index_col=0)
+        dataset_metrics_preds_f = resultdir / "{}.analysis.all.dataset.{}.metrics.csv".format(refname,
+                                                                                              optimized_metric)
+        dataset_metrics_preds = pd.read_csv(dataset_metrics_preds_f, index_col=0)
 
-            bootstr_ci_preds_f = resultdir / "{}.analysis.all.ci.{}.metrics.csv".format(refname, optimized_metric)
-            bootstr_ci_preds = pd.read_csv(bootstr_ci_preds_f, index_col=[0, 1])
-            target_metrics_preds_f = resultdir / "{}.analysis.all.target.{}.metrics.csv".format(refname,
-                                                                                                optimized_metric)
-            target_metrics_preds = pd.read_csv(target_metrics_preds_f, index_col=[0, 1])
+        # bootstr_ci_preds_f = resultdir / "{}.analysis.all.ci.{}.metrics.csv".format(refname, optimized_metric)
+        # bootstr_ci_preds = pd.read_csv(bootstr_ci_preds_f, index_col=[0, 1])
+        target_metrics_preds_f = resultdir / "{}.analysis.all.target.{}.metrics.csv".format(refname,
+                                                                                            optimized_metric)
+        target_metrics_preds = pd.read_csv(target_metrics_preds_f, index_col=[0, 1])
 
-            dataset_metrics_bases = []
-            target_metrics_bases = []
-            for bt in basetypes:
-                # if bt in basetypes[3:]:
-                if bt in basetypes:
-                    target_metrics_base_f = baselndir / "{}.{}.avg.target.{}.metrics.csv".format(refname, bt,
-                                                                                                 optimized_metric)
-                    target_metrics_bases.append(
-                            pd.read_csv(target_metrics_base_f, index_col=[0, 1], header=[0, 1]).xs('mean', level=1,
-                                                                                                   axis=1))
-                    dataset_metrics_base_f = baselndir / "{}.{}.avg.dataset.{}.metrics.csv".format(refname, bt,
-                                                                                                   optimized_metric)
-                    dataset_metrics_bases.append(
-                            pd.read_csv(dataset_metrics_base_f, index_col=0).loc["mean"].to_frame(bt).T)
-                else:
-                    target_metrics_base_f = baselndir / "{}.{}.all.target.{}.metrics.csv".format(refname, bt,
-                                                                                                 optimized_metric)
-                    target_metrics_bases.append(pd.read_csv(target_metrics_base_f, index_col=[0, 1]))
-                    dataset_metrics_base_f = baselndir / "{}.{}.all.dataset.{}.metrics.csv".format(refname, bt,
-                                                                                                   optimized_metric)
-                    dataset_metrics_bases.append(pd.read_csv(dataset_metrics_base_f, index_col=[0]))
+        dataset_metrics_bases = []
+        target_metrics_bases = []
+        for bt in basetypes:
+            # if bt in basetypes[3:]:
+            if bt in basetypes:
+                target_metrics_base_f = baselndir / "{}.{}.avg.target.{}.metrics.csv".format(refname, bt,
+                                                                                             optimized_metric)
+                target_metrics_bases.append(
+                        pd.read_csv(target_metrics_base_f, index_col=[0, 1], header=[0, 1]).xs('mean', level=1,
+                                                                                               axis=1))
+                dataset_metrics_base_f = baselndir / "{}.{}.avg.dataset.{}.metrics.csv".format(refname, bt,
+                                                                                               optimized_metric)
+                dataset_metrics_bases.append(
+                        pd.read_csv(dataset_metrics_base_f, index_col=0).loc["mean"].to_frame(bt).T)
+            else:
+                target_metrics_base_f = baselndir / "{}.{}.all.target.{}.metrics.csv".format(refname, bt,
+                                                                                             optimized_metric)
+                target_metrics_bases.append(pd.read_csv(target_metrics_base_f, index_col=[0, 1]))
+                dataset_metrics_base_f = baselndir / "{}.{}.all.dataset.{}.metrics.csv".format(refname, bt,
+                                                                                               optimized_metric)
+                dataset_metrics_bases.append(pd.read_csv(dataset_metrics_base_f, index_col=[0]))
 
-            # old
-            target_metrics_bases = pd.concat(target_metrics_bases)
-            dataset_metrics_bases = pd.concat(dataset_metrics_bases)
+        # old
+        target_metrics_bases = pd.concat(target_metrics_bases)
+        dataset_metrics_bases = pd.concat(dataset_metrics_bases)
 
-            # target_metrics_bases = []
-            # dataset_metrics_bases = []
+        # target_metrics_bases = []
+        # dataset_metrics_bases = []
 
-            for metric_to_plot in ["f1s"]:
-                if metric_to_plot not in {"aucroc", "aucpr", "thr", "aps"}:
-                    plot_dataset_target_metric(metric_to_plot, dataset_metrics_preds, dataset_metrics_bases,
-                                               target_metrics_preds, target_metrics_bases, bootstr_ci_preds, outputdir,
-                                               "{}_opt{}".format(refname, optimized_metric), names=get_names)
+        for metric_to_plot in ["f1s"]:
+            if metric_to_plot not in {"aucroc", "aucpr", "thr", "aps"}:
+                plot_dataset_target_metric(metric_to_plot, dataset_metrics_preds, dataset_metrics_bases,
+                                           target_metrics_preds, target_metrics_bases, None, outputdir,
+                                           "{}_opt{}".format(refname, optimized_metric), names=get_names)
 
-                    # plot_dat_tgt_metric_cpuspeed(metric_to_plot, dataset_metrics_preds, dataset_metrics_bases,
-                    #                            target_metrics_preds, target_metrics_bases, bootstr_ci_preds, outputdir,
-                    #                            "{}_opt{}".format(refname, optimized_metric), names=get_names)
+                # plot_dat_tgt_metric_cpuspeed(metric_to_plot, dataset_metrics_preds, dataset_metrics_bases,
+                #                            target_metrics_preds, target_metrics_bases, bootstr_ci_preds, outputdir,
+                #                            "{}_opt{}".format(refname, optimized_metric), names=get_names)
 
-                    plot_pertarget_permethod_heatmap(metric_to_plot, target_metrics_preds, target_metrics_bases,
-                                                     outputdir, "{}_opt{}".format(refname, optimized_metric),
-                                                     names=get_names)
-                    plot_methdod_correlation(metric_to_plot, target_metrics_preds, outputdir,
-                                             "{}_opt{}".format(refname, optimized_metric))
+                plot_pertarget_permethod_heatmap(metric_to_plot, target_metrics_preds, target_metrics_bases,
+                                                 outputdir, "{}_opt{}".format(refname, optimized_metric),
+                                                 names=get_names)
+                # plot_methdod_correlation(metric_to_plot, target_metrics_preds, outputdir,
+                #                          "{}_opt{}".format(refname, optimized_metric))
 
-            plot_average_overall_ranking(optimized_metric, target_metrics_preds, target_metrics_bases, outputdir,
-                                         refname, names=get_names, level='target')
-            plot_average_overall_ranking(optimized_metric, dataset_metrics_preds, dataset_metrics_bases,
-                                         outputdir, refname, names=get_names, level='dataset')
-            plot_average_overall_ranking(optimized_metric, target_metrics_preds, target_metrics_bases, outputdir,
-                                         refname, plotfirst=10, names=get_names, level='target')
-            plot_average_overall_ranking(optimized_metric, dataset_metrics_preds, dataset_metrics_bases, outputdir,
-                                         refname, plotfirst=10, names=get_names, level='dataset')
-            # plot_icontent_correlation(optimized_metric, predictions, *naive_preds, outputdir, refname, names=get_names)
+        # plot_average_overall_ranking(optimized_metric, target_metrics_preds, target_metrics_bases, outputdir,
+        #                              refname, names=get_names, level='target')
+        # plot_average_overall_ranking(optimized_metric, dataset_metrics_preds, dataset_metrics_bases,
+        #                              outputdir, refname, names=get_names, level='dataset')
+        # plot_average_overall_ranking(optimized_metric, target_metrics_preds, target_metrics_bases, outputdir,
+        #                              refname, plotfirst=10, names=get_names, level='target')
+        # plot_average_overall_ranking(optimized_metric, dataset_metrics_preds, dataset_metrics_bases, outputdir,
+        #                              refname, plotfirst=10, names=get_names, level='dataset')
 
-            # if optimized_metric == 'f1s':
-            #     plot_cputime_to_performance('f1s', target_metrics_preds, outputdir, refname, names=get_names)
+        # plot_icontent_correlation(optimized_metric, predictions, *naive_preds, outputdir, refname, names=get_names)
 
-            # if optimized_metric != "default":
-            #     plot_metric_to_threshold(optimized_metric,
-            #                              dataset_metrics_single_preds,
-            #                              dataset_metrics_default["thr"].round(3),
-            #                              dataset_metrics_preds["thr"].round(3),
-            #                              outputdir, refname, names=get_names)
+        # if optimized_metric == 'f1s':
+        #     plot_cputime_to_performance('f1s', target_metrics_preds, outputdir, refname, names=get_names)
+
+        # if optimized_metric != "default":
+        #     plot_metric_to_threshold(optimized_metric,
+        #                              dataset_metrics_single_preds,
+        #                              dataset_metrics_default["thr"].round(3),
+        #                              dataset_metrics_preds["thr"].round(3),
+        #                              outputdir, refname, names=get_names)
 
 
 if __name__ == "__main__":
@@ -777,6 +788,9 @@ if __name__ == "__main__":
     resultdir = Path(args.resultDir)
     baselndir = Path(args.baselineDir)
     outputdir = Path(args.outputDir)
+
+    os.makedirs(outputdir, exist_ok=True)
+
     refdir = Path(args.referenceDir)
     # datadir = Path(args.datasetStatsDir)
 
@@ -787,7 +801,7 @@ if __name__ == "__main__":
     # "fixedposfrc",
     #  "random", "shuffledataset", "shuffletargets"]   # random
 
-    basetypes = ["random", "shuffledataset", "shuffletargets"]  # random baselines
+    basetypes = ["random", "shuffledataset"]  # random baselines
     # plot_metrics_correlation(resultdir, outputdir)
     # plot_metrics_clustermap(resultdir, outputdir)
 
@@ -804,5 +818,7 @@ if __name__ == "__main__":
 
     # iterate over file in dir (foreach reference)
 
-    with Pool(processes=cpu_count()) as pool:
+    with Pool(processes=cpu_count() - 1) as pool:
         pool.map(make_plots, refdir.glob(args.glob), chunksize=1)
+    # for refdir in refdir.glob(args.glob):
+    #     make_plots(refdir)
