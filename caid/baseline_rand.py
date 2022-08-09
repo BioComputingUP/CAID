@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import multiprocessing as mp
 
+from tqdm import tqdm
 
 from caid import set_logger
 from vectorized_metrics import baseline_random
@@ -26,14 +27,12 @@ def parse_args():
 
 
 def generate_references(reference):
-    print('Generating references for {}'.format(reference), flush=True)
     ref, refname = baseline_random.get_reference(reference)
-    baseline_random.baseline_random(ref, n=100, basename=refname, outpath=args.outdir, target=True)
-    baseline_random.baseline_shuffle_dataset(ref, n=100, basename=refname, outpath=args.outdir, target=True)
+    baseline_random.baseline_random(ref, n=100, basename=refname, outpath="/projects/CAID2/baselines", target=True)
+    baseline_random.baseline_shuffle_dataset(ref, n=100, basename=refname, outpath="/projects/CAID2/baselines", target=True)
     # baseline_random.baseline_shuffle_targets(ref, n=100, basename=refname, outpath=args.outdir, target=True)
     # baseline_random.baseline_fixed_positive_fraction(ref, 0.354, n=100, basename=refname, outpath=args.outdir,
     #                                                  target=True)  # id content in DisProt 7.0 dataset
-    print('Done with {}'.format(reference), flush=True)
 
 
 if __name__ == '__main__':
@@ -44,4 +43,4 @@ if __name__ == '__main__':
     os.makedirs(args.outdir, exist_ok=True)
 
     with mp.Pool(processes=mp.cpu_count() - 1) as p:
-        p.map(generate_references, references)
+        list(tqdm(p.imap(generate_references, references), total=len(references), desc='Generating references'))

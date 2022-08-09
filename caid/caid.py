@@ -1,6 +1,7 @@
 # module imports
 import argparse
 import logging
+import multiprocessing as mp
 import os
 import sys
 from pathlib import Path
@@ -20,7 +21,8 @@ def parse_args():
 
     parser.add_argument('predictions', help="directory containing prediction file(s)")
 
-    parser.add_argument('-r', '--refList', help='reference csv file with associations between predictor and reference', required=True)
+    parser.add_argument('-r', '--refList', help='reference csv file with associations between predictor and reference',
+                        required=True)
 
     parser.add_argument('-o', '--outputDir', default='.',
                         help='directory where the output will be written (default: cwd)')
@@ -36,19 +38,24 @@ def parse_args():
     return args
 
 
-# def parse_config(config_file):
-#     config_parser = configparser.ConfigParser()
-#     config_parser.optionxform = str
-#     config_parser.read(config_file)
-#
-#     return config_parser
-
-
 def set_logger(logfile, level):
     logging.basicConfig(level=level,
                         format='%(asctime)s | %(module)-13s | %(levelname)-8s | %(message)s',
                         stream=open(logfile) if logfile else sys.stderr)
 
+
+def run_bvaluation(reference):
+    column_of_interest = [col for col in pred_references.columns if col in reference.stem][0]
+    pred_for_reference = pred_references[pred_references[column_of_interest] == 1].Method.to_list()
+    pred_paths = list(filter(lambda x: x.stem in pred_for_reference, all_pred_paths))
+
+    if len(pred_paths) == 0:
+        raise ValueError(f'No predictors found for reference {reference}')
+
+    bvaluation(str(reference), pred_paths, outpath=args.outputDir, dataset=True, bootstrap=True, target=True)
+
+
+excluded = ['pdb-atleast']
 
 if __name__ == '__main__':
     args = parse_args()
@@ -56,22 +63,11 @@ if __name__ == '__main__':
     all_pred_paths = list(Path(args.predictions).glob('*.caid'))
     all_ref_paths = list(Path(args.references_path).glob('*.fasta'))
 
-    pred_references = pd.read_csv(args.refList, sep=',')
+    all_ref_paths = list(filter(lambda x: x.stem not in excluded, all_ref_paths))
 
-    references = pred_references.columns[1:]
+    pred_references = pd.read_csv(args.refList, sep=',')
 
     os.makedirs(args.outputDir, exist_ok=True)
 
-    for reference in tqdm(references, desc='Bvaluation on references'):
-        pred_for_reference = pred_references[pred_references[reference] == 1].Method.to_list()
-        pred_paths = list(filter(lambda x: x.stem in pred_for_reference, all_pred_paths))
-
-        if len(pred_paths) == 0:
-            raise ValueError(f'No predictors found for reference {reference}')
-
-        ref_path = list(filter(lambda x: x.stem == reference, all_ref_paths))
-
-        if len(ref_path) == 0:
-            raise ValueError(f'No reference found for {reference}')
-
-        bvaluation(str(ref_path[0]), pred_paths, outpath=args.outputDir, dataset=True, bootstrap=True, target=True)
+    with mp.Pool(processes=mp.cpu_count() - 1) as p:
+        list(tqdm(p.imap(run_bvaluation, all_ref_paths), total=len(all_ref_paths), desc='Running bvaluation'))
