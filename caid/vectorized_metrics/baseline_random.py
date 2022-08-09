@@ -4,7 +4,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-# relative imports
 from .logger import set_logger
 from .parsers import parse_reference
 from .vectorized_metrics import dataset_curves_and_metrics, target_curves_and_metrics
@@ -31,7 +30,8 @@ def baseline_random(ref, n=100, basename="", target=True, outpath='.'):
         if target is True:  # very slow
             aln_ref_pred = ref.assign(**{predname: yscore})  # **{} allows to dynamically assign column name
             # print("nproteins", len(aln_ref_pred.index.get_level_values(0).unique()))
-            aln_ref_pred.columns = aln_ref_pred.columns.set_levels(list(ref.columns.get_level_values(1))[1::-1] + ["scores"], level=1)
+            aln_ref_pred.columns = aln_ref_pred.columns.set_levels(
+                    list(ref.columns.get_level_values(1))[1::-1] + ["scores"], level=1)
             target_metrics = target_curves_and_metrics(aln_ref_pred, predname)
             # target_metrics.to_csv(outpath / ".".join([basename, "random", predname, "target", "metrics", "csv"]))
 
@@ -83,8 +83,8 @@ def baseline_shuffle_dataset(ref, n=100, basename="", target=True, outpath="."):
 
         if target is True:  # very slow
             aln_ref_pred = ref.assign(**{predname: yscore})  # **{} allows to dynamically assign column name
-            aln_ref_pred.columns.set_levels(list(ref.columns.get_level_values(1))[1::-1] + ["scores"], level=1,
-                                            inplace=True)
+            aln_ref_pred.columns = aln_ref_pred.columns.set_levels(
+                    list(ref.columns.get_level_values(1))[1::-1] + ["scores"], level=1)
             target_metrics = target_curves_and_metrics(aln_ref_pred, predname)
 
         thresholds = {"default": 1.0,
@@ -105,7 +105,7 @@ def baseline_shuffle_dataset(ref, n=100, basename="", target=True, outpath="."):
         df = pd.concat(bsl_data[m])
         df.to_csv(outpath / ".".join([basename, "shuffledataset", "all", "dataset", m, "metrics", "csv"]))
         df.describe().round(3).to_csv(
-            outpath / ".".join([basename, "shuffledataset", "avg", "dataset", m, "metrics", "csv"]))
+                outpath / ".".join([basename, "shuffledataset", "avg", "dataset", m, "metrics", "csv"]))
         logging.debug("dataset csv written for threshold".format(m))
         if target is True:
             df = pd.concat(tgt_data[m])
@@ -144,8 +144,8 @@ def baseline_shuffle_targets(ref, n=100, basename="", target=True, outpath="."):
 
         if target is True:  # very slow
             aln_ref_pred = ref.assign(**{predname: yscore})  # **{} allows to dynamically assign column name
-            aln_ref_pred.columns.set_levels(list(aln_ref_pred.columns.get_level_values(1))[1::-1] + ["scores"], level=1,
-                                            inplace=True)
+            aln_ref_pred.columns = aln_ref_pred.columns.set_levels(
+                    list(aln_ref_pred.columns.get_level_values(1))[1::-1] + ["scores"], level=1)
             target_metrics = target_curves_and_metrics(aln_ref_pred, predname)
 
         *_, metrics, smry_metrics = dataset_curves_and_metrics(ytrue, yscore, predname)
@@ -167,7 +167,7 @@ def baseline_shuffle_targets(ref, n=100, basename="", target=True, outpath="."):
         df = pd.concat(bsl_data[m])
         df.to_csv(outpath / ".".join([basename, "shuffletargets", "all", "dataset", m, "metrics", "csv"]))
         df.describe().round(3).to_csv(
-            outpath / ".".join([basename, "shuffletargets", "avg", "dataset", m, "metrics", "csv"]))
+                outpath / ".".join([basename, "shuffletargets", "avg", "dataset", m, "metrics", "csv"]))
 
         if target is True:
             df = pd.concat(tgt_data[m])
@@ -195,8 +195,8 @@ def baseline_fixed_positive_fraction(ref, f, n=100, basename="", target=True, ou
 
         if target is True:  # very slow
             aln_ref_pred = ref.assign(**{predname: yscore})  # **{} allows to dynamically assign column name
-            aln_ref_pred.columns.set_levels(list(ref.columns.get_level_values(1))[1::-1] + ["scores"], level=1,
-                                            inplace=True)
+            aln_ref_pred.columns = aln_ref_pred.columns.set_levels(
+                    list(ref.columns.get_level_values(1))[1::-1] + ["scores"], level=1)
             target_metrics = target_curves_and_metrics(aln_ref_pred, predname)
 
         thresholds = {"default": 1.0,
@@ -215,7 +215,7 @@ def baseline_fixed_positive_fraction(ref, f, n=100, basename="", target=True, ou
         df = pd.concat(bsl_data[m])
         df.to_csv(outpath / ".".join([basename, "fixedposfrc", "all", "dataset", m, "metrics", "csv"]))
         df.describe().round(3).to_csv(
-            outpath / ".".join([basename, "fixedposfrc", "avg", "dataset", m, "metrics", "csv"]))
+                outpath / ".".join([basename, "fixedposfrc", "avg", "dataset", m, "metrics", "csv"]))
 
         if target is True:
             df = pd.concat(tgt_data[m])

@@ -1,5 +1,6 @@
 import argparse
 import logging
+import shutil
 import warnings
 from pathlib import Path
 from typing import Callable, List, Tuple, Union
@@ -7,7 +8,6 @@ from typing import Callable, List, Tuple, Union
 import numpy as np
 import pandas as pd
 from scipy import stats
-from tqdm import tqdm
 
 from .logger import set_logger
 from .parsers import parse_prediction, parse_reference, parse_thresholds
@@ -229,7 +229,7 @@ def align_reference_prediction(ref: dict, pred: dict, drop_missing: bool = True)
             aln_pred[p] = aln_pred[(p[0], 'states')]
 
     if drop_missing is True:
-        aln_pred = aln_pred.dropna(0)
+        aln_pred = aln_pred.dropna(axis=0)
 
     return aln_pred, wrong_len_preds
 
@@ -474,6 +474,8 @@ def bvaluation(reference: str, predictions: list, outpath=".", dataset=True, tar
     ref_obj, accs = parse_reference(reference.resolve(strict=True))  # resolve raises an error if file doesn't exists
     provided_thr = parse_thresholds(Path(threshold_file)) if threshold_file is not None else None
 
+    metrics_to_write = ["f1s", "mcc", "default", "bac"]
+
     roc_curves = []
     pr_curves = []
     cmats = []
@@ -485,7 +487,7 @@ def bvaluation(reference: str, predictions: list, outpath=".", dataset=True, tar
     bts_data = {}
     ci_data = {}
 
-    for prediction in tqdm(predictions, desc="Bvaluation started"):
+    for prediction in predictions:
         predname = Path(prediction).stem
         logging.info('benchmarking {}'.format(predname))
         pred_obj = parse_prediction(prediction, accs, predname, normalize=normalize)  # returns dict
@@ -525,11 +527,18 @@ def bvaluation(reference: str, predictions: list, outpath=".", dataset=True, tar
             target_metrics.to_csv(outpath / ".".join([refname, run_tag, predname, "target", "metrics", "csv"]))
 
         # {<label>: <threshold>} for each threshold a file will be saved with metrics optimized for that threshold
-        thresholds = {"default": get_default_threshold(provided_thr, predname, aln_ref_pred[predname].to_numpy()),
-                      **dataset_metrics.idxmax(1).loc[predname].to_dict()}
+        try:
+            thresholds = {"default": get_default_threshold(provided_thr, predname, aln_ref_pred[predname].to_numpy()),
+                          **dataset_metrics.idxmax(1).loc[predname].to_dict()}
+        except ValueError as e:
+            print("\n{} has no thresholds for {}, removing".format(predname, reference.stem))
+            shutil.rmtree(outpath / ".".join([refname, run_tag, predname, "dataset", "metrics", "csv"]), ignore_errors=True)
+            shutil.rmtree(outpath / ".".join([refname, run_tag, predname, "bootstrap", "metrics", "csv"]), ignore_errors=True)
+            shutil.rmtree(outpath / ".".join([refname, run_tag, predname, "target", "metrics", "csv"]), ignore_errors=True)
+            return
 
         # find metrics of current pred for each threshold in <thresholds>; store to be later joined with other preds
-        for m in thresholds:
+        for m in metrics_to_write:
             if dataset is True:
                 # store predictor performance in outer scope variable
                 dts_data.setdefault(m, []).append(dataset_metrics[thresholds[m]].unstack().assign(**smry_metrics,
@@ -552,7 +561,7 @@ def bvaluation(reference: str, predictions: list, outpath=".", dataset=True, tar
         logging.info("analysis complete; {}".format(predname))
 
     # merge metrics of all predictors in a pd.DataFrame; save df as csv
-    for m in tqdm(thresholds, desc="Merging metrics"):
+    for m in metrics_to_write:
         if dataset is True:
             pd.concat(dts_data[m]).to_csv(outpath / ".".join([refname, run_tag, "all", "dataset", m, "metrics", "csv"]))
             pd.concat(cm_data[m]).to_csv(outpath / ".".join([refname, run_tag, "all", "dataset", m, "cmat", "csv"]))
