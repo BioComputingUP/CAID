@@ -527,7 +527,7 @@ def parse_args():
 
     parser.add_argument('-d', '--dpi', default=150, help='figures dpi')
     parser.add_argument('-g', '--glob', default='*.fasta')
-    parser.add_argument('-n', '--names', default=None, help='json file with predictors names')
+    parser.add_argument('-n', '--names', default="data/caid_names.json", help='json file with predictors names')
 
     parser.add_argument('-l', '--log', type=str, default=None, help='log file')
     parser.add_argument("-ll", "--logLevel", default="ERROR",
@@ -610,9 +610,85 @@ def plot_species_count(dst, outdir):
     plt.close(plt.gcf())
 
 
-def get_names(fname):
-    names = json.load(open(args.names))
+def plot_tables(results_path, ref_name, metric_to_optimize, sort_dataset='aucroc', sort_target='f1s'):
+    coverage = pd.read_csv(results_path / f'{ref_name}.analysis.all.target.{metric_to_optimize}.metrics.csv',
+                           index_col=[0, 1],
+                           header=[0, 1])
 
+    coverage = coverage.groupby(level=0).count().max(axis=1)
+
+    cols_dataset = ["name", "bac", "csi", "f05", "f1s", "f2s", "fnr", "fom", "fpr", "inf", "mcc", "mk", "npv", "ppv",
+                    "tnr", "tpr", "aucroc", "aucpr", "aps", "thr"]
+    cols_dataset_to_use = ["name", "bac", "f1s", "fpr", "mcc", "tpr", "tnr", "aucroc"]
+    cols_dataset_index = [cols_dataset.index(col) for col in cols_dataset_to_use]
+
+    cols_target = ["name", "target", "bac", "csi", "f05", "f1s", "f2s", "fnr", "fom", "fpr", "inf", "mcc", "mk", "npv",
+                   "ppv", "tnr", "tpr", "thr"]
+    cols_target_to_use = ["name", "target", "bac", "f1s", "fpr", "mcc", "ppv", "tpr", "tnr"]
+    cols_target_index = [cols_target.index(col) for col in cols_target_to_use]
+
+    for typology in ["target", "dataset"]:
+        # Read the only metrics of interest from the result file
+        metrics = pd.read_csv(results_path / f'{ref_name}.analysis.all.{typology}.{metric_to_optimize}.metrics.csv',
+                              index_col=[0], usecols=cols_dataset_index if typology == "dataset" else cols_target_index)
+
+        max_predicted = max(coverage)
+
+        # Compute the coverage of the predicted sequences
+        metrics["cov"] = coverage
+        sorted_by = sort_dataset if typology == "dataset" else sort_target
+
+        if typology == "dataset":
+            metrics = metrics.sort_values(by=sorted_by, ascending=False)
+        if typology == "target":
+            metrics = metrics.groupby(level=0).mean().sort_values(by="f1s", ascending=False)
+
+        # Create two colormaps, one ascending and one descending (white to green and green to white)
+        cmap_WG = sns.light_palette("seagreen", as_cmap=True)
+        cmap_GW = sns.light_palette("seagreen", as_cmap=True, reverse=True)
+
+        def add_axis_left_space(ax, space):
+            x = ax.get_subplotspec().get_position(ax.figure)
+            x.x0 = x.x0 + space
+            x.x1 = x.x1 + space
+            ax.set_position(x)
+
+        # Define the column width ratios, all equal except for the coverage that should be smaller
+        ratios = [0.7 if col == "cov" else 1 for col in metrics.columns]
+
+        f, axs = plt.subplots(1, metrics.columns.size, figsize=(10, 13), dpi=150,
+                              gridspec_kw={'wspace': 0, 'width_ratios': ratios}, sharey='all')
+
+        # Define the title of the plot
+        plt.suptitle(f"Reference: {ref_name.title()}, optimization: {metric_to_optimize.upper()} - {typology}, "
+                     f"n: {max_predicted}, sorted: {sorted_by.upper()}",
+                     fontsize=18, y=0.94)
+
+        yticklabels = [get_names(metrics.index[i]) for i in range(len(metrics.index))]
+
+        # for each metric define a subplot and plot the metrics as a heatmap
+        for i, (s, ax) in enumerate(zip(metrics.columns, axs)):
+            ax.tick_params(axis='both', which='major', labelsize=12, labelbottom=False, bottom=False, top=False,
+                           left=False,
+                           labeltop=True)
+
+            fmt = ".2f" if s != 'cov' else ".0f"
+            cmap = cmap_GW if s in ['fpr'] else cmap_WG
+            vmax = 1 if s != 'cov' else max_predicted
+
+            sns.heatmap(np.array([metrics[s].values]).T, vmax=vmax, vmin=0, yticklabels=yticklabels,
+                        xticklabels=[s.upper()], annot=True, fmt=fmt, ax=ax,
+                        cmap=cmap, linewidths=0.5, cbar=False, annot_kws={"size": 12})
+
+            # Add a space to the left of the coverage column
+            if s == 'cov':
+                add_axis_left_space(ax, 0.02)
+
+        # Save the figure in svg format
+        plt.savefig(output_dir / f"{ref_name}.table.{typology}.{metric_to_optimize}.png", dpi=150, bbox_inches='tight')
+
+
+def get_names(fname):
     name = names.get(fname)
     # fname = fname.lower()
     if name is None:
@@ -653,6 +729,9 @@ def make_plots(reference):
     refname = reference.stem
     logging.debug(refname)
 
+    for optimized_metric in ["default", "f1s", "mcc", "bac"]:
+        plot_tables(result_dir, refname, optimized_metric)
+
     roc_preds_f = result_dir / "{}.analysis.all.dataset._.roc.csv".format(refname)
     roc_preds = pd.read_csv(roc_preds_f, index_col=[0], header=[0, 1, 2])
     # old
@@ -686,8 +765,8 @@ def make_plots(reference):
     # plot_pr(pr_preds, cons_pr, *pr_bases, pr_random_bases, coverage, outputdir, refname, sortby="fmax", names=get_names)
 
     # new
-    # plot_pr(pr_preds, None, None, None, pr_random_bases, coverage, outputdir, refname, sortby="auc", names=get_names)
-    # plot_pr(pr_preds, None, None, None, pr_random_bases, coverage, outputdir, refname, sortby="aps", names=get_names)
+    # plot_pr(pr_preds, None, None, None, pr_random_bases, coverage, output_dir, refname, sortby="auc", names=get_names)
+    # plot_pr(pr_preds, None, None, None, pr_random_bases, coverage, output_dir, refname, sortby="aps", names=get_names)
     plot_pr(pr_preds, None, None, None, pr_random_bases, coverage, output_dir, refname, sortby="fmax", names=get_names)
 
     dataset_metrics_default_f = result_dir / "{}.analysis.all.dataset.default.metrics.csv".format(refname)
@@ -702,7 +781,8 @@ def make_plots(reference):
 
         # predictions = pd.read_csv(resultdir / "{}.analysis.all.dataset._.predictions.csv".format(refname),
         #                           index_col=[0, 1], header=[0, 1])
-        # naive_preds = [pd.read_csv(baselndir / "{}.{}.all.dataset._.predictions.csv".format(refname, n), index_col=[0, 1], header=[0, 1]) for n in basetypes[:3]]
+        # naive_preds = [pd.read_csv(baselndir / "{}.{}.all.dataset._.predictions.csv".format(refname, n),
+        #                           index_col=[0, 1], header=[0, 1]) for n in basetypes[:3]]
 
         dataset_metrics_preds_f = result_dir / "{}.analysis.all.dataset.{}.metrics.csv".format(refname,
                                                                                                optimized_metric)
@@ -787,6 +867,8 @@ if __name__ == "__main__":
     args = parse_args()
     set_logger(args.log, args.logLevel)
     logging.getLogger('matplotlib').setLevel(logging.WARNING)
+
+    names = json.load(open(args.names, "r"))
 
     dpi = args.dpi
     result_dir = Path(args.resultDir)

@@ -572,7 +572,7 @@ def bvaluation(reference: str, predictions: list, outpath=".", dataset=True, tar
                     outpath / ".".join([refname, run_tag, "all", "bootstrap", m, "metrics", "csv"]))
             pd.concat(ci_data[m]).to_csv(outpath / ".".join([refname, run_tag, "all", "ci", m, "metrics", "csv"]))
 
-    all_preds_aligned, excluded = align_reference_prediction(ref_obj, all_preds)
+    all_preds_aligned, excluded = align_reference_prediction(ref_obj, all_preds, False)
     all_preds_aligned.to_csv(outpath / ".".join([refname, run_tag, "all", "dataset", "_", "predictions", "csv"]))
 
     if excluded:
