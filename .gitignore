@@ -3,6 +3,9 @@
 /plots
 !/plots/.gitkeep
 
+plots-filtered/
+results-filtered/
+
 /data
 !/data/predictions/.gitkeep
 !/data/annotations/.gitkeep
