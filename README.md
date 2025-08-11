@@ -1,19 +1,9 @@
-## Introduction
-This repository contains the code for CAID challenge assessment. Upon having predictions and reference set, you can run caid.py to generate the evalutations and metrics. 
-
-CAID software packages wraps the vectorized_cls_metrics repository (https://github.com/marnec/vectorized_cls_metrics) (with small modifications), 
-which performs the calculations of the classification metrics used throughout CAID. For the details of evaluations, please see the Papers section. 
+## CAID Assessment
+This repository contains the code for CAID challenge assessment. Upon having predictions and reference sets, you can use this repository to generate the evalutations and metrics. CAID software packages wraps the vectorized_cls_metrics repository (https://github.com/marnec/vectorized_cls_metrics) (with small modifications), which performs the calculations of the classification metrics used throughout CAID. For the details of evaluations, please see the Papers section. 
 
 
-## Outline
-* Papers
-* Requirements
-* Installation
-* Data
-* Usage
-* License
+**How to cite?**
 
-## Papers
 If you use this code in your research, please cite the following papers:
 
 [CAID2 2022](https://onlinelibrary.wiley.com/doi/full/10.1002/prot.26582)
@@ -23,21 +13,13 @@ If you use this code in your research, please cite the following papers:
 - Necci, M., Piovesan, D., CAID Predictors. et al. Critical assessment of protein intrinsic disorder prediction. Nat Methods 18, 472–481 (2021). https://doi.org/10.1038/s41592-021-01117-3
 
 
-## Requirements
-### Interpreter
-Python 3.8+
-
-### Dependencies
-To install the dependencies, run: 
-```
-pip install -r requirements.txt
-```
-
 ## Installation
-Installation is only possible on Unix systems. In order to install the package you can simply clone this repository, 
+To run this package, you need to have `Python 3.8+` installed. 
 
 ```
-git clone https://github.com/BioComputingUP/CAID.git
+git clone https://github.com/BioComputingUP/CAID.git        # clone the repository
+
+pip install -r requirements.txt                             # install the requirements
 ```
 
 The repository is structures as below (the demo-data just contains sample data from CAID3 and the results you get from the assessment).
@@ -51,7 +33,7 @@ CAID                    --> (CAID repository)
     └── results/        --> directory for saving results
 ```
 
-## Data
+## Inputs
 
 ### Predictions
 In order to run the assessment, you have to have your predictions in CAID ouptut format (see https://caid.idpcentral.org/challenge), where columns correspond to position, residue type, disorder/binding score, and a binary state. If the state is not provided, it will be automatically calculated using a threshold by maximizing f1-score.  
@@ -73,8 +55,12 @@ References must be provided as a single fasta file, includeing the sequence and 
 MNASDFRRRGKEMVDYMADYLE
 000011111000----------
 ```
+## Outputs
 
+TODO
+ 
 ## Usage
+To run the assessment, you can run the `caid.py` script with arguments explained as below:
 ```
 python3 caid.py <patha-reference-fasta> <directory-containing-predictions> -o <output-directory>
 ```
