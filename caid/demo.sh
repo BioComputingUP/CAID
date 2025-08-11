@@ -1,1 +1,0 @@
-python3 caid.py demo/demo-reference.txt demo/demo_preds -ll INFO -o demo/demo_output
