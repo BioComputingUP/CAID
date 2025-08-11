@@ -43,12 +43,12 @@ git clone https://github.com/BioComputingUP/CAID.git
 The repository is structures as below (the demo-data just contains sample data from CAID3 and the results you get from the assessment).
 ```
 CAID                    --> (CAID repository)
-├── caid.py             --> the script to run the evaluaions
-├── vectorized_metircs/ --> the assessment library 
-├── demo-data           --> demo data directory, with sample data from CAID3 challenge  
-    ├── predictions/    --> directory containing prediction of each method
-    ├── references/     --> directory containing reference fasta file 
-    └── results/        --> directory for saving results
+ ├── caid.py             --> the script to run the evaluaions
+ ├── vectorized_metircs/ --> the assessment library 
+ └── demo-data           --> demo data directory, with sample data from CAID3 challenge  
+   ├── predictions/    --> directory containing prediction of each method
+   ├── references/     --> directory containing reference fasta file 
+   └── results/        --> directory for saving results
 ```
 
 ## Data
@@ -83,5 +83,41 @@ For example, the `demo-data/predictions` folder contains the predictions of 3 pr
 ```
 python3 caid.py demo-data/references/disorder_pdb.fasta demo-data/predictions -o demo-data/results
 ```
+
+## Output
+
+The following files are generated:
+
+```text
+# Score distribution for every method. `rawscore` are all scores, `thresholds` is the unique list of thresholds.
+<method>.{rawscore,thresholds}.distribution.txt
+
+# `dataset` are the metrics for every considered threshold
+# `bootstrap` same as `dataset` but using bootstrapping
+# `target` same as `dataset` but for every target
+<reference>.analysis.<method>.{bootstrap,dataset,target}.metrics.csv
+
+# Optimized thresholds for every metric calculated
+<reference>.analysis.<method>.thr.csv
+
+# `ci` confidence intervals for all methods on the considered `optimization`
+# `bootstrap` metrics for each method and each boostrap sample for every on the considered `optimization`  
+<reference>.all.{ci,bootstrap}.<optimization>.metrics.csv
+
+# `cmat` confusion matrix for every method
+# `metrics` metrics for each method
+<reference>.all.dataset.<optimization>.{cmat,metrics}.csv
+
+# `cmat` confusion matrices for all methods and all thresholds
+# `pr` precision-recall data for all methods
+# `roc` ROC data for all methods
+# `predictions` score and binary predictions for all methods
+<reference>.all.dataset._.{cmat,pr,predictions,roc}.csv
+
+# metrics for all methods and all targets on the considered `optimization`
+<reference>.all.target.<optimization>.metrics.csv
+
+```
+
 ## License
 [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)
