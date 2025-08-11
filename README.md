@@ -35,6 +35,7 @@ CAID                     --> (CAID repository)
 In order to run the assessment, you have to have your predictions in CAID ouptut format (see https://caid.idpcentral.org/challenge), where columns correspond to position, residue type, disorder/binding score, and a binary state. If the state is not provided, it will be automatically calculated using a threshold by maximizing f1-score.  
 
 ```
+# predictor_name.caid
 >DP01234
 1    M    0.892    1
 2    E    0.813    1
@@ -47,6 +48,7 @@ Each file must be stored with .caid suffix. You can access and download all CAID
 References must be provided as a single fasta file, includeing the sequence and the labels corresponding to each residue. In the labels, 0 indicates order, 1 indicates disorder/binding/linker, and - denotes that this residue is not included in the assessment. All the CAID challenge references can be downloaded from https://caid.idpcentral.org/challenge/results.
 
 ```
+# reference_name.fasta
 >DP01234
 MNASDFRRRGKEMVDYMADYLE
 000011111000----------
