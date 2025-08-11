@@ -27,6 +27,12 @@ If you use this code in your research, please cite the following papers:
 ### Interpreter
 Python 3.8+
 
+### Dependencies
+To install the dependencies, run: 
+```
+pip install -r requirements.txt
+```
+
 ## Installation
 Installation is only possible on Unix systems. In order to install the package you can simply clone this repository, 
 
