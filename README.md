@@ -91,7 +91,7 @@ After running the assessment (see usage), the following files are generated.
 ## Usage
 To run the assessment, you can run the `caid.py` script with arguments explained as below:
 ```
-python3 caid.py <patha-reference-fasta> <directory-containing-predictions> -o <output-directory>
+python3 caid.py <path-to-reference-fasta> <directory-containing-predictions> -o <output-directory>
 ```
 For example, the `demo-data/predictions` folder contains the predictions of 3 predictors from CAID3, and `demo-data/references/disorder_pdb.fasta` is the Disorder-PDB from [CAID3](https://caid.idpcentral.org/challenge/results). The script could be run by: 
 
