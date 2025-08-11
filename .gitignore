@@ -1,15 +1,1 @@
-/results
-!/results/.gitkeep
-/plots
-!/plots/.gitkeep
-
-plots-filtered/
-results-filtered/
-
-/data
-!/data/predictions/.gitkeep
-!/data/annotations/.gitkeep
-!/data/references/.gitkeep
-!/data/baselines/.gitkeep
-
-/.idea
+vectorized_metrics/__pycache__
