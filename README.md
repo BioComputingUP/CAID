@@ -9,7 +9,6 @@ which performs the calculations of the classification metrics used throughout CA
 * Papers
 * Requirements
 * Installation
-* Demo
 * Data
 * Usage
 * License
@@ -49,7 +48,7 @@ CAID                    --> (CAID repository)
 ## Data
 
 ### Predictions
-In order to run the assessment, you have to have your predictions in CAID ouptut format (see https://caid.idpcentral.org/challenge), where columns correspond to position, residue type, disorder/binding score, and a binary state. If the state is not provided, it will be automatically calculated using a threshold by maximizing f1 score.  
+In order to run the assessment, you have to have your predictions in CAID ouptut format (see https://caid.idpcentral.org/challenge), where columns correspond to position, residue type, disorder/binding score, and a binary state. If the state is not provided, it will be automatically calculated using a threshold by maximizing f1-score.  
 
 ```
 >DP01234
@@ -57,11 +56,11 @@ In order to run the assessment, you have to have your predictions in CAID ouptut
 2    E    0.813    1
 ...
 ```
-Each file must be stored with .caid suffix. You can access and download all CAID challenge results from https://caid.idpcentral.org/challenge/results.
+Each file must be stored with .caid suffix. You can access and download all CAID challenge results from https://caid.idpcentral.org/challenge/results. 
 
 
 ### References
-References must be provided as a single fasta file, includeing the sequence and the labels corresponding to each residue. In the labels, 0 indicates order, 1 indicates disorder/binding/linker, and - denotes that this residue is not included in the assessment.   
+References must be provided as a single fasta file, includeing the sequence and the labels corresponding to each residue. In the labels, 0 indicates order, 1 indicates disorder/binding/linker, and - denotes that this residue is not included in the assessment. All the CAID challenge references can be downloaded from https://caid.idpcentral.org/challenge/results.
 
 ```
 >DP01234
@@ -71,7 +70,7 @@ MNASDFRRRGKEMVDYMADYLE
 
 ## Usage
 ```
-python3 caid.py <reference-fasta-file> <directory-containing-predictions.caid> -o <output-directory>
+python3 caid.py <patha-reference-fasta> <directory-containing-predictions> -o <output-directory>
 ```
 For example, the `demo-data/predictions` folder contains the predictions of 3 predictors from CAID3, and `demo-data/references/disorder_pdb.fasta` is the Disorder-PDB from [CAID3](https://caid.idpcentral.org/challenge/results). The script could be run by: 
 
