@@ -464,10 +464,12 @@ def target_curves_and_metrics(aln_refpred, predname):
 
     logging.debug("converting target metrics dict to dataframe")
     logging.debug("number of targets: {}".format(len(target_metrics)))
-    target_metrics = pd.DataFrame(target_metrics).round(3) \
-        .sort_index(ascending=False) \
-        .fillna(method='ffill') \
-        .fillna(method='backfill').T
+    # deprecated
+    # target_metrics = pd.DataFrame(target_metrics).round(3) \
+    #     .sort_index(ascending=False) \
+    #     .fillna(method='ffill') \
+    #     .fillna(method='backfill').T
+    target_metrics = pd.DataFrame(target_metrics).round(3).sort_index(ascending=False).ffill().bfill().T
     logging.debug("target metrics and curves done")
     return target_metrics
 
